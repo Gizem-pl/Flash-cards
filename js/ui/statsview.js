@@ -41,7 +41,7 @@ function bars(values) {
   const svg = s('svg', { viewBox: `0 0 ${W} ${H + 18}` });
   const defs = s('defs');
   const g = s('linearGradient', { id: 'barg', x1: 0, y1: 0, x2: 0, y2: 1 });
-  g.append(s('stop', { offset: '0', 'stop-color': '#5ccbfa' }), s('stop', { offset: '1', 'stop-color': '#2e9cf2' }));
+  g.append(s('stop', { offset: '0', 'stop-color': '#7A8D7C' }), s('stop', { offset: '1', 'stop-color': '#5F7161' }));
   defs.append(g);
   svg.append(defs);
   const bw = W / values.length;

@@ -28,7 +28,7 @@ function applyTheme() {
   if (t === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
   const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#000000' : '#f2f2f7');
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#000000' : '#FAF7F2');
 }
 export const isDark = () => app.prefs.theme === 'dark' || (app.prefs.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
 

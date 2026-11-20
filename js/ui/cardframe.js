@@ -13,13 +13,13 @@ img { max-width: 100%; height: auto; }
 hr#answer { border: none; height: 1px; background: rgba(128,128,128,.35); margin: 20px 0; }
 .replay-button { display: inline-block; vertical-align: middle; margin: 4px; text-decoration: none; }
 .replay-button svg { width: 40px; height: 40px; }
-.replay-button svg circle { fill: rgba(46, 156, 242,.14); }
-.replay-button svg path { fill: #2e9cf2; }
+.replay-button svg circle { fill: rgba(95,113,97,.14); }
+.replay-button svg path { fill: #5F7161; }
 #typeans { width: 100%; max-width: 520px; box-sizing: border-box; font-size: 18px; padding: 12px 14px; border-radius: 12px; border: 1.5px solid rgba(128,128,128,.4); background: transparent; color: inherit; font-family: inherit; }
 code#typeans { display: inline-block; border: none; text-align: left; font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; }
 .typeGood { background: rgba(52,199,89,.3); border-radius: 3px; } .typeBad { background: rgba(255,59,48,.3); border-radius: 3px; } .typeMissed { background: rgba(142,142,147,.3); border-radius: 3px; }
 .cloze { font-weight: bold; color: blue; } .nightMode .cloze { color: lightblue; }
-a.hint { color: #2e9cf2; }
+a.hint { color: #5F7161; }
 #qa { transition: opacity .16s ease; }
 .template-error { color: #ff3b30; font-size: 14px; }
 </style><style id="cardcss"></style></head>
@@ -142,6 +142,9 @@ export class CardFrame {
   post(msg) { this.el.contentWindow?.postMessage(msg, '*'); }
   async show(html, css, cls, focus = true) {
     const token = ++this.seq;
+    // Anki's default card style hard-codes white/black; let those follow the app palette. Custom colours are untouched.
+    css = css.replace(/(\.card\s*\{[^}]*?)background-color:\s*(?:white|#fff(?:fff)?)\s*;/i, '$1background-color: transparent;')
+      .replace(/(\.card\s*\{[^}]*?[^-]color:\s*)(?:black|#000(?:000)?)(\s*;)/i, '$1#2C2C2C$2');
     const [h2, c2] = await inlineMedia(this.col, html, css);
     if (token !== this.seq) return; // a newer card was requested meanwhile
     const msg = { type: 'show', html: h2, css: c2, cls, focus };
