@@ -13,13 +13,13 @@ img { max-width: 100%; height: auto; }
 hr#answer { border: none; height: 1px; background: rgba(128,128,128,.35); margin: 20px 0; }
 .replay-button { display: inline-block; vertical-align: middle; margin: 4px; text-decoration: none; }
 .replay-button svg { width: 40px; height: 40px; }
-.replay-button svg circle { fill: rgba(110,92,250,.14); }
-.replay-button svg path { fill: #6e5cfa; }
+.replay-button svg circle { fill: rgba(46, 156, 242,.14); }
+.replay-button svg path { fill: #2e9cf2; }
 #typeans { width: 100%; max-width: 520px; box-sizing: border-box; font-size: 18px; padding: 12px 14px; border-radius: 12px; border: 1.5px solid rgba(128,128,128,.4); background: transparent; color: inherit; font-family: inherit; }
 code#typeans { display: inline-block; border: none; text-align: left; font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; }
 .typeGood { background: rgba(52,199,89,.3); border-radius: 3px; } .typeBad { background: rgba(255,59,48,.3); border-radius: 3px; } .typeMissed { background: rgba(142,142,147,.3); border-radius: 3px; }
 .cloze { font-weight: bold; color: blue; } .nightMode .cloze { color: lightblue; }
-a.hint { color: #6e5cfa; }
+a.hint { color: #2e9cf2; }
 #qa { transition: opacity .16s ease; }
 .template-error { color: #ff3b30; font-size: 14px; }
 </style><style id="cardcss"></style></head>
