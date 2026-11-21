@@ -30,7 +30,7 @@ Tap **+ → Import .apkg** and pick a file from the Files app (iCloud Drive, Dow
 - **Scheduling:** Anki's SM-2 scheduler, ported from Anki's own source code and checked against Anki's unit tests. FSRS can be switched on in Settings. Learning and relearning steps, interval randomization ("fuzz"), leeches, burying related cards, daily limits through subdecks and the day-rollover hour all work like Anki.
 - **Deck options:** Anki's settings, organised in presets. Each deck screen also has a quick picker for new cards per day (20 / 40 / 50 / 100).
 - **Custom decks:** combine several decks (for example *Day 1* + *Day 51*) and study them together.
-- **Random 25:** a practice round of 25 random cards from a deck, a custom deck or everything. It doesn't change your schedule.
+- **Random 25:** a practice round of 25 random cards from a deck, a custom deck or everything. Answers are scheduled with the same 4 buttons as normal study.
 - **Cards:** card templates with HTML/CSS/JavaScript, cloze deletions (including nested and hints), type-in answers, images, audio, text-to-speech, furigana, math (MathJax) and night mode.
 - **Card browser:** uses Anki's search syntax (`dog`, `deck:Spanish`, `tag:verb`, `is:due`, `-is:new`, `front:h*`, `prop:ivl>30`, `OR`, parentheses) and has filters and card actions.
 - **Statistics:** today's reviews, streak, retention, upcoming reviews, an activity heatmap, card counts and answer buttons.

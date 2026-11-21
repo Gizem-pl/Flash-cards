@@ -12,7 +12,7 @@ export const FLAG_COLORS = ['transparent', '#ff3b30', '#ff9500', '#34c759', '#00
 
 /**
  * deckId: a deck id, or an array of deck ids (custom deck).
- * practice: a random round of `size` cards from those decks that doesn't change scheduling.
+ * practice: a random round of `size` cards from those decks, scheduled like a normal session.
  */
 export function openStudy(deckId, { practice = false, size = 25 } = {}) {
   const col = app.col;
@@ -121,11 +121,6 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
       clear(bar, h('button.btn.primary.show', { onclick: reveal }, 'Show answer'));
       return;
     }
-    if (session.practice) {
-      clear(bar, [[1, 'Again', 'Show again'], [3, 'Good', 'Next card']].map(([r, label, sub], i) => h(`button.rate.r${r}`, { style: { animationDelay: `${i * 25}ms` }, onclick: () => answer(r) },
-        h('span.ivl', sub), h('span.lbl', label))));
-      return;
-    }
     clear(bar, RATINGS.map((r, i) => h(`button.rate.r${r}`, { style: { animationDelay: `${i * 25}ms` }, onclick: () => answer(r) },
       app.prefs.showIntervals ? h('span.ivl', formatInterval(previews[r].secs)) : null,
       h('span.lbl', RATING_NAMES[r]))));
@@ -133,7 +128,6 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
 
   function answer(rating) {
     if (!card || !showingAnswer) return;
-    if (session.practice) rating = rating === 1 ? 1 : 3;
     try {
       const res = session.answer(card, rating, Date.now() - shownAt);
       reviewed++;
@@ -177,7 +171,7 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
       clear(body, h('div.finished',
         h('div.badge', icon('check')),
         h('h2', 'Round done!'),
-        h('p.muted', `You went through ${session.total} random card${session.total === 1 ? '' : 's'}. Your schedule wasn’t changed.`),
+        h('p.muted', `You went through ${session.total} random card${session.total === 1 ? '' : 's'}.`),
         h('button.btn.primary', { style: { maxWidth: '320px', marginTop: '16px' }, onclick: () => { close(); openStudy(deckId, { practice, size }); } }, icon('zap', 'sm'), `Another ${size}`),
         h('button.btn', { style: { maxWidth: '320px', width: '100%' }, onclick: close }, 'Done')));
       return;

@@ -190,53 +190,24 @@ export class StudySession {
 }
 
 /**
- * Practice round: up to `size` random cards from the given decks (and their subdecks), new or not, not just the due ones.
- * Answers don't change scheduling. "Again" brings the card back a few cards later; "Good" finishes it.
+ * Random round: up to `size` random cards from the given decks (and their subdecks), new or not, not just the due ones.
+ * Answers are scheduled with Anki's 4-button scheduler, exactly like a normal study session.
  */
-export class PracticeSession {
+export class PracticeSession extends StudySession {
   constructor(col, deckIds, size = 25) {
-    this.col = col;
+    super(col, deckIds);
     this.practice = true;
-    this.deckIds = Array.isArray(deckIds) ? [...deckIds] : [deckIds];
     this.size = size;
     const ids = new Set(this.deckIds.filter((id) => col.deck(id)).flatMap((id) => col.deckAndDescendantIds(id)));
     const pool = [...col.cards.values()].filter((c) => ids.has(c.did) && c.queue !== Queue.Suspended);
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-    this.queue = pool.slice(0, size);
-    this.total = this.queue.length;
-    this.done = 0;
-    this.undoStack = [];
+    this.learning = [];
+    this.main = pool.slice(0, size);
+    this.total = this.main.length;
   }
 
-  get counts() { return { remaining: this.queue.length }; }
-  get canUndo() { return this.undoStack.length > 0; }
-  get nextLearningDue() { return null; }
-  nextCard() { return this.queue[0] || null; }
-  previews() { return null; }
+  get counts() { return { remaining: this.main.length + this.learning.length }; }
   rebuild() { /* the round is fixed once picked */ }
-
-  answer(card, rating) {
-    this.undoStack.push({ queue: [...this.queue], done: this.done, card: { ...card } });
-    this.queue = this.queue.filter((c) => c.id !== card.id);
-    if (rating === 1) this.queue.splice(Math.min(3, this.queue.length), 0, card);
-    else this.done++;
-    return {};
-  }
-
-  undo() {
-    const e = this.undoStack.pop();
-    if (!e) return null;
-    this.queue = e.queue.map((c) => this.col.card(c.id) || c);
-    this.done = e.done;
-    return e.card;
-  }
-
-  remove(ids) { const set = new Set(ids); this.queue = this.queue.filter((c) => !set.has(c.id)); }
-  refresh(id) {
-    const fresh = this.col.card(id);
-    if (!fresh) return this.remove([id]);
-    this.queue = this.queue.map((c) => (c.id === id ? fresh : c));
-  }
 }
 
 /** Interleaves `extra` evenly into `base` (or before / after it). */

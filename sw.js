@@ -1,6 +1,6 @@
 // Offline support: the app shell is precached; app files update in the background;
 // the CDN libraries (JSZip, sql.js, fzstd, MathJax) are cached the first time they're used.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL = `shell-${VERSION}`;
 const CDN = 'cdn-v1';
 const FILES = [
