@@ -3,6 +3,7 @@ import { app, navigate, pickImportFile } from './app.js';
 import { collectionStats } from '../core/stats.js';
 import { openStudy } from './study.js';
 import { openEditor } from './editor.js';
+import { customCounts, editCustomDeck } from './custom.js';
 
 export function decksView(root) {
   const col = app.col;
@@ -55,6 +56,38 @@ export function decksView(root) {
   };
   walk(tree, 0);
   root.append(list);
+
+  // custom decks: groups of decks studied together
+  root.append(h('h2.section', 'Custom decks'));
+  const customs = col.customDecks();
+  root.append(h('div.list',
+    customs.map((cd) => {
+      const n = col.cardCount(cd.deckIds);
+      return h('div.deck-row', { style: { paddingLeft: '6px', '--indent': '32px' } },
+        h('span.toggle', { style: { color: 'var(--accent)' } }, icon('layers', 'sm')),
+        h('div.name', { onclick: () => navigate(`/custom/${cd.id}`) },
+          h('div.t', cd.name), h('div.sub', `${cd.deckIds.length} deck${cd.deckIds.length === 1 ? '' : 's'} · ${n} card${n === 1 ? '' : 's'}`)),
+        countsPills(customCounts(cd)),
+        h('button.more-btn', { 'aria-label': 'Custom deck actions', onclick: () => customActions(cd) }, icon('more', 'sm')));
+    }),
+    h('button.row.tap', { onclick: () => editCustomDeck() }, icon('folderplus', 'sm ic'),
+      h('div.grow', h('div', 'Create custom deck'), h('div.sub', 'Combine decks, e.g. Day 1 + Day 51')), icon('right', 'sm chev'))));
+
+  // random practice from everything
+  root.append(h('h2.section', 'Practice'));
+  root.append(h('div.list',
+    h('button.row.tap', { onclick: () => openStudy(tree.map((n) => n.deck.id), { practice: true }) }, icon('zap', 'sm ic'),
+      h('div.grow', h('div', 'Random 25'), h('div.sub', 'Mixed from all your decks · doesn’t change your schedule')), icon('right', 'sm chev'))));
+}
+
+async function customActions(cd) {
+  const c = customCounts(cd);
+  await actionSheet(cd.name, [
+    c.new + c.learning + c.review ? { label: 'Study now', icon: 'play', run: () => openStudy(cd.deckIds) } : null,
+    { label: 'Random 25', icon: 'zap', run: () => openStudy(cd.deckIds, { practice: true }) },
+    { label: 'Open', icon: 'right', run: () => navigate(`/custom/${cd.id}`) },
+    { label: 'Edit', icon: 'edit', run: () => editCustomDeck(cd) },
+  ]);
 }
 
 function stat(k, v) { return h('div', h('div.v', String(v)), h('div.k', k)); }
@@ -64,6 +97,7 @@ async function deckActions(n) {
   const total = n.counts.new + n.counts.learning + n.counts.review;
   await actionSheet(n.deck.name, [
     total ? { label: 'Study now', icon: 'play', run: () => openStudy(n.deck.id) } : null,
+    { label: 'Random 25', icon: 'zap', run: () => openStudy(n.deck.id, { practice: true }) },
     { label: 'Open deck', icon: 'right', run: () => navigate(`/deck/${n.deck.id}`) },
     { label: 'Add note', icon: 'edit', run: () => openEditor({ deckId: n.deck.id }) },
   ]);
@@ -73,6 +107,7 @@ async function addMenu() {
   await actionSheet(null, [
     { label: 'Add note', icon: 'edit', run: () => openEditor({ deckId: null }) },
     { label: 'Create deck', icon: 'folderplus', run: createDeck },
+    { label: 'Create custom deck', icon: 'layers', run: () => editCustomDeck() },
     { label: 'Import .apkg / .colpkg', icon: 'import', run: pickImportFile },
   ]);
 }

@@ -5,6 +5,7 @@ import { exportPackage } from '../core/exporter.js';
 import { h, clear, icon, toast, progress, sheet, shareOrDownload } from './dom.js';
 import { decksView } from './decks.js';
 import { overviewView } from './overview.js';
+import { customView } from './custom.js';
 import { browseView } from './browse.js';
 import { statsView } from './statsview.js';
 import { settingsView, notetypesView, notetypeEditorView } from './settings.js';
@@ -40,7 +41,7 @@ const TABS = [
   ['stats', 'Stats', 'chart'],
   ['settings', 'Settings', 'gear'],
 ];
-const TAB_OF = { deck: 'decks', notetypes: 'settings', notetype: 'settings' };
+const TAB_OF = { deck: 'decks', custom: 'decks', notetypes: 'settings', notetype: 'settings' };
 
 function route() {
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -61,6 +62,7 @@ function render() {
   try {
     switch (r.name) {
       case 'deck': overviewView(inner, Number(r.arg)); break;
+      case 'custom': customView(inner, Number(r.arg)); break;
       case 'browse': browseView(inner); break;
       case 'stats': statsView(inner); break;
       case 'settings': settingsView(inner); break;

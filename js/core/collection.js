@@ -154,7 +154,7 @@ export class Collection {
 
   // ------------------------------------------------------------ decks
 
-  allDecks() { return [...this.decks.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })); }
+  allDecks() { return [...this.decks.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })); }
   deck(id) { return this.decks.get(id); }
   deckByName(name) {
     const n = normalizeDeckName(name).toLowerCase();
@@ -199,6 +199,33 @@ export class Collection {
     const ids = new Set(this.deckAndDescendantIds(id));
     this.deleteCards([...this.cards.values()].filter((c) => ids.has(c.did)).map((c) => c.id));
     for (const did of ids) if (did !== DEFAULT_DECK) { this.decks.delete(did); this._del('decks', did); }
+  }
+
+  // ------------------------------------------------------------ custom decks
+  // A custom deck is a saved group of regular decks (e.g. "Day 1" + "Day 51") studied together. Cards stay in their decks.
+
+  customDecks() {
+    return (this.meta.customDecks || []).map((cd) => ({ ...cd, deckIds: cd.deckIds.filter((id) => this.decks.has(id)) }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+  }
+  customDeck(id) { return this.customDecks().find((cd) => cd.id === id) || null; }
+  saveCustomDeck({ id = null, name, deckIds }) {
+    const list = this.meta.customDecks || [];
+    const cd = { id: id || this.newId(new Set(list.map((x) => x.id))), name: String(name).trim(), deckIds: [...new Set(deckIds)] };
+    this.meta.customDecks = [...list.filter((x) => x.id !== cd.id), cd];
+    this._saveMeta();
+    return cd;
+  }
+  deleteCustomDeck(id) {
+    this.meta.customDecks = (this.meta.customDecks || []).filter((x) => x.id !== id);
+    this._saveMeta();
+  }
+  /** Card count of a group of decks including subdecks. */
+  cardCount(deckIds) {
+    const ids = new Set(deckIds.flatMap((id) => this.deckAndDescendantIds(id)));
+    let n = 0;
+    for (const c of this.cards.values()) if (ids.has(c.did)) n++;
+    return n;
   }
 
   // ------------------------------------------------------------ notetypes

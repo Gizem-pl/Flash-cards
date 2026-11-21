@@ -1,4 +1,4 @@
-import { h, icon, actionSheet, promptDialog, confirmDialog, toast, sheet, switchEl } from './dom.js';
+import { h, icon, actionSheet, promptDialog, confirmDialog, toast, sheet, switchEl, segmented } from './dom.js';
 import { app, navigate, exportDeck } from './app.js';
 import { stripHTML } from '../core/util.js';
 import { openStudy } from './study.js';
@@ -29,7 +29,12 @@ export function overviewView(root, deckId) {
   root.append(h('div.card.pad',
     h('div.bigcounts', big('New', c.new, 'var(--new)'), big('Learning', c.learning, 'var(--learn)'), big('Review', c.review, 'var(--review)')),
     total ? h('button.btn.primary', { onclick: () => openStudy(deckId) }, icon('play', 'sm'), 'Study now')
-      : h('div.done-msg', icon('check'), h('div', 'Congratulations! You have finished this deck for now.'))));
+      : h('div.done-msg', icon('check'), h('div', 'Congratulations! You have finished this deck for now.')),
+    node.total ? h('button.btn.tinted.block', { style: { marginTop: '10px' }, onclick: () => openStudy(deckId, { practice: true }) },
+      icon('zap', 'sm'), 'Random 25') : null));
+  if (node.total) root.append(h('p.hint', 'Random 25 mixes cards from this whole deck, not only the ones due today. It doesn’t change your schedule.'));
+
+  root.append(h('h2.section', 'New cards per day'), dailyLimitPicker(deckId));
 
   if (deck.desc) root.append(h('div.card.pad.small.muted', { style: { marginTop: '14px' } }, stripHTML(deck.desc)));
 
@@ -42,6 +47,25 @@ export function overviewView(root, deckId) {
     row('Deck options', 'sliders', () => openDeckOptions(deckId)),
     row('Export deck (.apkg)', 'share', () => exportSheet(deckId))));
   root.append(h('p.small.muted.center', { style: { marginTop: '16px' } }, `${node.total} cards${node.children.length ? ' including subdecks' : ''}`));
+}
+
+export const DAILY_LIMITS = [20, 40, 50, 100];
+
+/** Quick picker for the deck preset's "New cards/day". */
+export function dailyLimitPicker(deckId) {
+  const col = app.col;
+  const cfg = col.configForDeck(deckId);
+  const shared = col.allDecks().filter((d) => d.conf === cfg.id).length;
+  const opts = DAILY_LIMITS.includes(cfg.newPerDay) ? DAILY_LIMITS : [...DAILY_LIMITS, cfg.newPerDay].sort((a, b) => a - b);
+  return h('div.card.pad',
+    segmented(opts.map((v) => [v, String(v)]), cfg.newPerDay, (v) => {
+      col.saveConfig({ ...col.config(cfg.id), newPerDay: v });
+      toast(`${v} new cards per day`);
+      app.rerender();
+    }),
+    h('div.small.muted', { style: { marginTop: '10px' } },
+      shared > 1 ? `Applies to every deck that uses the “${cfg.name}” preset (${shared} decks). You can set other numbers in Deck options.`
+        : 'You can set any other number in Deck options.'));
 }
 
 function exportSheet(deckId) {

@@ -118,6 +118,7 @@ h2.section { font-size: 13px; font-weight: 600; text-transform: uppercase; lette
 
 /* ---------- decks ---------- */
 .deck-row { display: flex; align-items: center; gap: 6px; padding: 12px 14px 12px 6px; position: relative; }
+.deck-row + .row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 0.5px solid var(--border); }
 .deck-row + .deck-row::before { content: ""; position: absolute; top: 0; right: 0; left: var(--indent, 30px); border-top: 0.5px solid var(--border); }
 .deck-row .toggle { width: 26px; height: 32px; display: grid; place-items: center; color: var(--faint); transition: transform .2s; flex: none; }
 .deck-row .toggle.open { transform: rotate(90deg); }
@@ -240,6 +241,9 @@ textarea.code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; mi
 .switch span::after { content: ""; position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.2); transition: transform .2s; }
 .switch input:checked + span { background: var(--review); }
 .switch input:checked + span::after { transform: translateX(20px); }
+.pick { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--faint); display: grid; place-items: center; flex: none; color: #fff; }
+.pick.on { background: var(--accent); border-color: var(--accent); }
+.pick svg { width: 14px; height: 14px; stroke-width: 3; }
 .segmented { display: flex; background: var(--surface-2); border-radius: 10px; padding: 2px; gap: 2px; }
 .segmented button { flex: 1; padding: 7px 10px; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--muted); }
 .segmented button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.12); }

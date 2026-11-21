@@ -4,9 +4,11 @@ import { answerCard, previewAll, CardType, Queue } from './scheduler.js';
 import { deckParentName } from './collection.js';
 
 export class StudySession {
+  /** deckId: one deck id, or an array of deck ids (a custom deck) studied together with their subdecks. */
   constructor(col, deckId) {
     this.col = col;
-    this.deckId = deckId;
+    this.deckIds = Array.isArray(deckId) ? [...deckId] : [deckId];
+    this.deckId = this.deckIds[0];
     this.learning = [];
     this.main = [];
     this.undoStack = [];
@@ -18,14 +20,15 @@ export class StudySession {
   rebuild() {
     const col = this.col;
     col.unburyIfNeeded();
-    const root = col.deck(this.deckId);
-    if (!root) { this.learning = []; this.main = []; return; }
-    const deckIds = new Set(col.deckAndDescendantIds(this.deckId));
+    const roots = this.deckIds.filter((id) => col.deck(id));
+    if (!roots.length) { this.learning = []; this.main = []; return; }
+    this.deckId = roots[0];
+    const deckIds = new Set(roots.flatMap((id) => col.deckAndDescendantIds(id)));
     const today = col.today, dayEnd = col.nextDayAt;
     const relevant = col.allDecks().filter((d) => deckIds.has(d.id));
     const byName = new Map(relevant.map((d) => [d.name.toLowerCase(), d]));
 
-    // remaining limits per deck (subtree done counts); parent limits above the selected deck are not applied (Anki default)
+    // remaining limits per deck (subtree done counts); parent limits above the selected decks are not applied (Anki default)
     const remNew = new Map(), remRev = new Map(), ignoreRev = new Map(), parentOf = new Map();
     for (const d of relevant) {
       const cfg = this.config(d.id);
@@ -36,7 +39,7 @@ export class StudySession {
       remNew.set(d.id, Math.max(0, cfg.newPerDay - n));
       ignoreRev.set(d.id, cfg.newIgnoreReviewLimit);
       const p = deckParentName(d.name);
-      if (d.id !== root.id && p && byName.has(p.toLowerCase())) parentOf.set(d.id, byName.get(p.toLowerCase()).id);
+      if (p && byName.has(p.toLowerCase())) parentOf.set(d.id, byName.get(p.toLowerCase()).id);
     }
     const chain = (did) => { const out = [did]; let cur = did; while (parentOf.has(cur)) { cur = parentOf.get(cur); out.push(cur); } return out; };
 
@@ -183,6 +186,56 @@ export class StudySession {
     if (!fresh) return this.remove([id]);
     this.learning = this.learning.map((c) => (c.id === id ? fresh : c));
     this.main = this.main.map((c) => (c.id === id ? fresh : c));
+  }
+}
+
+/**
+ * Practice round: up to `size` random cards from the given decks (and their subdecks), new or not, not just the due ones.
+ * Answers don't change scheduling. "Again" brings the card back a few cards later; "Good" finishes it.
+ */
+export class PracticeSession {
+  constructor(col, deckIds, size = 25) {
+    this.col = col;
+    this.practice = true;
+    this.deckIds = Array.isArray(deckIds) ? [...deckIds] : [deckIds];
+    this.size = size;
+    const ids = new Set(this.deckIds.filter((id) => col.deck(id)).flatMap((id) => col.deckAndDescendantIds(id)));
+    const pool = [...col.cards.values()].filter((c) => ids.has(c.did) && c.queue !== Queue.Suspended);
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    this.queue = pool.slice(0, size);
+    this.total = this.queue.length;
+    this.done = 0;
+    this.undoStack = [];
+  }
+
+  get counts() { return { remaining: this.queue.length }; }
+  get canUndo() { return this.undoStack.length > 0; }
+  get nextLearningDue() { return null; }
+  nextCard() { return this.queue[0] || null; }
+  previews() { return null; }
+  rebuild() { /* the round is fixed once picked */ }
+
+  answer(card, rating) {
+    this.undoStack.push({ queue: [...this.queue], done: this.done, card: { ...card } });
+    this.queue = this.queue.filter((c) => c.id !== card.id);
+    if (rating === 1) this.queue.splice(Math.min(3, this.queue.length), 0, card);
+    else this.done++;
+    return {};
+  }
+
+  undo() {
+    const e = this.undoStack.pop();
+    if (!e) return null;
+    this.queue = e.queue.map((c) => this.col.card(c.id) || c);
+    this.done = e.done;
+    return e.card;
+  }
+
+  remove(ids) { const set = new Set(ids); this.queue = this.queue.filter((c) => !set.has(c.id)); }
+  refresh(id) {
+    const fresh = this.col.card(id);
+    if (!fresh) return this.remove([id]);
+    this.queue = this.queue.map((c) => (c.id === id ? fresh : c));
   }
 }
 

@@ -1,7 +1,7 @@
 // Full-screen review session.
 import { h, clear, icon, actionSheet, confirmDialog, toast } from './dom.js';
 import { app, isDark } from './app.js';
-import { StudySession } from '../core/session.js';
+import { StudySession, PracticeSession } from '../core/session.js';
 import { RATINGS, RATING_NAMES } from '../core/scheduler.js';
 import { formatInterval } from '../core/util.js';
 import { CardFrame, audio } from './cardframe.js';
@@ -10,10 +10,15 @@ import { openEditor } from './editor.js';
 const FLAG_NAMES = ['No flag', 'Red', 'Orange', 'Green', 'Blue', 'Pink', 'Turquoise', 'Purple'];
 export const FLAG_COLORS = ['transparent', '#ff3b30', '#ff9500', '#34c759', '#007aff', '#ff2d92', '#30c5c5', '#af52de'];
 
-export function openStudy(deckId) {
+/**
+ * deckId: a deck id, or an array of deck ids (custom deck).
+ * practice: a random round of `size` cards from those decks that doesn't change scheduling.
+ */
+export function openStudy(deckId, { practice = false, size = 25 } = {}) {
   const col = app.col;
   let session;
-  try { session = new StudySession(col, deckId); } catch (e) { toast(e.message); return; }
+  try { session = practice ? new PracticeSession(col, deckId, size) : new StudySession(col, deckId); } catch (e) { toast(e.message); return; }
+  if (practice && !session.total) { toast('There are no cards to practise here.'); return; }
 
   let card = null, rendered = null, showingAnswer = false, previews = null, shownAt = Date.now(), reviewed = 0, waitTimer = null, cfg = null;
 
@@ -57,13 +62,17 @@ export function openStudy(deckId) {
   }
 
   function renderCounts() {
+    undoBtn.disabled = !session.canUndo;
+    if (session.practice) {
+      clear(countsEl, h('span', { style: { color: 'var(--accent)' } }, `${session.counts.remaining} left`));
+      return;
+    }
     const c = session.counts;
     const q = card?.queue;
     clear(countsEl,
       h(`span.c-new${q === 0 ? '.active' : ''}`, String(c.new)),
       h(`span.c-learn${q === 1 || q === 3 ? '.active' : ''}`, String(c.learning)),
       h(`span.c-review${q === 2 ? '.active' : ''}`, String(c.review)));
-    undoBtn.disabled = !session.canUndo;
   }
 
   function cls() {
@@ -112,6 +121,11 @@ export function openStudy(deckId) {
       clear(bar, h('button.btn.primary.show', { onclick: reveal }, 'Show answer'));
       return;
     }
+    if (session.practice) {
+      clear(bar, [[1, 'Again', 'Show again'], [3, 'Good', 'Next card']].map(([r, label, sub], i) => h(`button.rate.r${r}`, { style: { animationDelay: `${i * 25}ms` }, onclick: () => answer(r) },
+        h('span.ivl', sub), h('span.lbl', label))));
+      return;
+    }
     clear(bar, RATINGS.map((r, i) => h(`button.rate.r${r}`, { style: { animationDelay: `${i * 25}ms` }, onclick: () => answer(r) },
       app.prefs.showIntervals ? h('span.ivl', formatInterval(previews[r].secs)) : null,
       h('span.lbl', RATING_NAMES[r]))));
@@ -119,6 +133,7 @@ export function openStudy(deckId) {
 
   function answer(rating) {
     if (!card || !showingAnswer) return;
+    if (session.practice) rating = rating === 1 ? 1 : 3;
     try {
       const res = session.answer(card, rating, Date.now() - shownAt);
       reviewed++;
@@ -156,6 +171,15 @@ export function openStudy(deckId) {
         h('h2', 'Coming up'), h('p.muted', 'Learning cards are due soon. They’ll appear automatically.'), timerEl,
         h('button.btn.tinted', { onclick: close }, 'Close')));
       tick();
+      return;
+    }
+    if (session.practice) {
+      clear(body, h('div.finished',
+        h('div.badge', icon('check')),
+        h('h2', 'Round done!'),
+        h('p.muted', `You went through ${session.total} random card${session.total === 1 ? '' : 's'}. Your schedule wasn’t changed.`),
+        h('button.btn.primary', { style: { maxWidth: '320px', marginTop: '16px' }, onclick: () => { close(); openStudy(deckId, { practice, size }); } }, icon('zap', 'sm'), `Another ${size}`),
+        h('button.btn', { style: { maxWidth: '320px', width: '100%' }, onclick: close }, 'Done')));
       return;
     }
     clear(body, h('div.finished',
