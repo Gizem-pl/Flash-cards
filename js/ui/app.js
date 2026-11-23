@@ -17,7 +17,7 @@ export const app = {
 };
 
 function loadPrefs() {
-  const defaults = { theme: 'system', tapToReveal: true, showIntervals: true, twoButtons: false, lastNotetype: null, lastDeck: 1 };
+  const defaults = { theme: 'system', tapToReveal: true, showIntervals: true, twoButtons: true, lastNotetype: null, lastDeck: 1 };
   try { return { ...defaults, ...JSON.parse(localStorage.getItem('prefs') || '{}') }; } catch { return defaults; }
 }
 export function savePrefs() {
