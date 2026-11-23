@@ -142,36 +142,54 @@ app.rerender = render;
 
 // ---------------------------------------------------------------- import / export
 
-const fileInput = h('input', { type: 'file', multiple: true, class: 'hidden', onchange: async (e) => {
+const fileInput = h('input', { type: 'file', multiple: true, class: 'hidden', onchange: (e) => {
   const files = [...e.target.files];
   e.target.value = '';
-  for (const f of files) await importFile(f);
+  importFiles(files);
 } });
 
 export function pickImportFile() { fileInput.click(); }
 
-export async function importFile(file) {
-  if (!/\.(apkg|colpkg|zip)$/i.test(file.name)) {
-    toast('Choose an Anki package (.apkg or .colpkg)');
-    return;
-  }
-  const p = progress(`Importing ${file.name}…`);
+export function importFile(file) { return importFiles([file]); }
+
+/** Imports one or many packages under a single progress box, then shows one summary. */
+let importing = false;
+export async function importFiles(list) {
+  const files = [...list].filter((f) => /\.(apkg|colpkg|zip)$/i.test(f.name));
+  const skipped = list.length - files.length;
+  if (!files.length) { toast('Choose an Anki package (.apkg or .colpkg)'); return; }
+  if (importing) { toast('Please wait for the current import to finish'); return; }
+  importing = true;
+  navigator.storage?.persist?.().catch(() => {});
+  const n = files.length;
+  const p = progress(n === 1 ? `Importing ${files[0].name}…` : `Importing 1 of ${n}…`);
+  const total = { notesAdded: 0, notesUpdated: 0, notesUnchanged: 0, cardsAdded: 0, mediaFiles: 0, notetypesAdded: 0, decks: [], warnings: [], failed: [], files: n };
   try {
-    navigator.storage?.persist?.().catch(() => {});
-    const summary = await importPackage(file, app.col, { onProgress: (m, f) => p.update(m, f) });
-    // update the screen underneath first, then swap the progress box for the result sheet
-    // on the same dimmed background, so nothing blinks
-    resetViewport();
-    render();
-    showImportResult(summary);
-    p.close();
-  } catch (e) {
-    p.close();
-    console.error(e);
-    toast(`Import failed: ${e.message || e}`);
-    resetViewport();
-    render();
+    for (let i = 0; i < n; i++) {
+      const file = files[i];
+      const head = n === 1 ? '' : `Importing ${i + 1} of ${n}\n`;
+      p.update(`${head}${file.name}`, i / n);
+      try {
+        const s = await importPackage(file, app.col, { onProgress: (m, f) => p.update(`${head}${m}`, (i + (f ?? 0)) / n) });
+        for (const k of ['notesAdded', 'notesUpdated', 'notesUnchanged', 'cardsAdded', 'mediaFiles', 'notetypesAdded']) total[k] += s[k] || 0;
+        total.decks.push(...s.decks);
+        total.warnings.push(...s.warnings);
+      } catch (e) {
+        console.error(e);
+        total.failed.push(`${file.name}: ${e.message || e}`);
+      }
+    }
+  } finally {
+    importing = false;
   }
+  if (skipped) total.warnings.push(`${skipped} file${skipped === 1 ? ' was' : 's were'} skipped because ${skipped === 1 ? 'it isn’t' : 'they aren’t'} an Anki package.`);
+  // update the screen underneath first, then swap the progress box for the one result sheet
+  // on the same dimmed background, so nothing blinks
+  resetViewport();
+  render();
+  if (n === 1 && total.failed.length) toast(`Import failed: ${total.failed[0].split(': ').slice(1).join(': ')}`);
+  else showImportResult(total);
+  p.close();
 }
 
 // iOS can leave the page scrolled after the file picker or keyboard closes, which makes
@@ -188,10 +206,12 @@ function showImportResult(s) {
   sh.body.append(
     h('div.center', { style: { padding: '8px 0 18px' } },
       h('div.empty', h('div.art', icon('check')), h('h3', `${s.notesAdded} new note${s.notesAdded === 1 ? '' : 's'}`),
-        h('p', s.decks.length ? s.decks.slice(0, 6).join(' · ') + (s.decks.length > 6 ? ' …' : '') : 'Your collection is up to date.'))),
+        h('p', s.files > 1 ? `${s.files - s.failed.length} of ${s.files} files imported`
+          : s.decks.length ? s.decks.slice(0, 6).join(' · ') + (s.decks.length > 6 ? ' …' : '') : 'Your collection is up to date.'))),
     h('div.list', row('Notes added', s.notesAdded, 'plus'), s.notesUpdated ? row('Notes updated', s.notesUpdated, 'reset') : null,
       s.notesUnchanged ? row('Already in collection', s.notesUnchanged, 'check') : null, row('Cards added', s.cardsAdded, 'layers'),
       row('Media files', s.mediaFiles, 'image'), s.notetypesAdded ? row('Note types added', s.notetypesAdded, 'note') : null),
+    s.failed.length ? h('p.small', { style: { marginTop: '12px', color: 'var(--danger)' } }, `Couldn’t import: ${s.failed.join(' · ')}`) : '',
     s.warnings.length ? h('p.small.muted', { style: { marginTop: '12px' } }, [...new Set(s.warnings)].join(' ')) : '',
     h('button.btn.primary', { style: { marginTop: '18px' }, onclick: () => { sh.close(); navigate('/decks'); } }, 'Start studying'));
 }
@@ -235,7 +255,7 @@ async function boot() {
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', async (e) => {
     e.preventDefault();
-    for (const f of e.dataTransfer?.files || []) await importFile(f);
+    if (e.dataTransfer?.files?.length) importFiles([...e.dataTransfer.files]);
   });
   render();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});

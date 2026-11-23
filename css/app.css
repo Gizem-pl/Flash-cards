@@ -238,6 +238,7 @@ h2.section { font-size: 13px; font-weight: 600; text-transform: uppercase; lette
 @keyframes toast { 0% { opacity: 0; transform: translate(-50%, -12px); } 10%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -8px); } }
 
 .progress-box { background: var(--surface); border-radius: 20px; padding: 22px; width: 280px; text-align: center; }
+.progress-box .small { white-space: pre-line; overflow-wrap: anywhere; }
 .progress-box .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin: 14px 0 10px; }
 .progress-box .bar > div { height: 100%; background: var(--hero); width: 0; transition: width .2s; }
 .spinner { width: 34px; height: 34px; border: 3px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto; }
