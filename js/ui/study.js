@@ -56,7 +56,7 @@ export function openStudy(deckId, { practice = false, size = 30 } = {}) {
     if (!card) return false;
     if (!showingAnswer && (key === ' ' || key === 'Enter')) { reveal(); return true; }
     if (showingAnswer && (key === ' ' || key === 'Enter')) { answer(3); return true; }
-    if (showingAnswer && ['1', '2', '3', '4'].includes(key)) { answer(Number(key)); return true; }
+    if (showingAnswer && shownRatings().map(String).includes(key)) { answer(Number(key)); return true; }
     if (key === 'r') { replay(); return true; }
     return false;
   }
@@ -116,12 +116,15 @@ export function openStudy(deckId, { practice = false, size = 30 } = {}) {
     if (cfg.autoplay) audio.play(col, rendered.answerAV);
   }
 
+  // "Two buttons" setting: only Again and Good.
+  function shownRatings() { return app.prefs.twoButtons ? [1, 3] : RATINGS; }
+
   function renderBar() {
     if (!showingAnswer) {
       clear(bar, h('button.btn.primary.show', { onclick: reveal }, 'Show answer'));
       return;
     }
-    clear(bar, RATINGS.map((r, i) => h(`button.rate.r${r}`, { style: { animationDelay: `${i * 25}ms` }, onclick: () => answer(r) },
+    clear(bar, shownRatings().map((r, i) => h(`button.rate.r${r}`, { style: { animationDelay: `${i * 25}ms` }, onclick: () => answer(r) },
       app.prefs.showIntervals ? h('span.ivl', formatInterval(previews[r].secs)) : null,
       h('span.lbl', RATING_NAMES[r]))));
   }

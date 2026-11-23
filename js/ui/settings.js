@@ -25,7 +25,8 @@ export function settingsView(root) {
     h('h2.section', 'Review'),
     h('div.list.form',
       h('div.row', h('label', 'Tap card to show answer'), switchEl(app.prefs.tapToReveal, (v) => { app.prefs.tapToReveal = v; savePrefs(); })),
-      h('div.row', h('label', 'Show intervals on buttons'), switchEl(app.prefs.showIntervals, (v) => { app.prefs.showIntervals = v; savePrefs(); }))),
+      h('div.row', h('label', 'Show intervals on buttons'), switchEl(app.prefs.showIntervals, (v) => { app.prefs.showIntervals = v; savePrefs(); })),
+      h('div.row', h('label', 'Only Again / Good buttons'), switchEl(app.prefs.twoButtons, (v) => { app.prefs.twoButtons = v; savePrefs(); }))),
 
     h('h2.section', 'Appearance'),
     h('div.card.pad', segmented([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], app.prefs.theme, (v) => { app.prefs.theme = v; savePrefs(); })),
