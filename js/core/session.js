@@ -190,19 +190,23 @@ export class StudySession {
 }
 
 /**
- * Random round: up to `size` random cards from the given decks (and their subdecks), new or not, not just the due ones.
+ * Random round: up to `size` random cards from the given decks (and their subdecks), not just the due ones.
+ * Cards never answered yet (new) are picked first, so every card shows up once before any repeats;
+ * when fewer than `size` are left, the rest is filled with random already-seen cards.
  * Answers are scheduled with Anki's 4-button scheduler, exactly like a normal study session.
  */
 export class PracticeSession extends StudySession {
-  constructor(col, deckIds, size = 25) {
+  constructor(col, deckIds, size = 30) {
     super(col, deckIds);
     this.practice = true;
     this.size = size;
     const ids = new Set(this.deckIds.filter((id) => col.deck(id)).flatMap((id) => col.deckAndDescendantIds(id)));
     const pool = [...col.cards.values()].filter((c) => ids.has(c.did) && c.queue !== Queue.Suspended);
-    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const unseen = shuffle(pool.filter((c) => c.type === CardType.New));
+    const seen = unseen.length >= size ? [] : shuffle(pool.filter((c) => c.type !== CardType.New));
     this.learning = [];
-    this.main = pool.slice(0, size);
+    this.main = shuffle(unseen.concat(seen).slice(0, size));
     this.total = this.main.length;
   }
 

@@ -12,9 +12,9 @@ export const FLAG_COLORS = ['transparent', '#ff3b30', '#ff9500', '#34c759', '#00
 
 /**
  * deckId: a deck id, or an array of deck ids (custom deck).
- * practice: a random round of `size` cards from those decks, scheduled like a normal session.
+ * practice: a random round of `size` cards from those decks (unseen cards first), scheduled like a normal session.
  */
-export function openStudy(deckId, { practice = false, size = 25 } = {}) {
+export function openStudy(deckId, { practice = false, size = 30 } = {}) {
   const col = app.col;
   let session;
   try { session = practice ? new PracticeSession(col, deckId, size) : new StudySession(col, deckId); } catch (e) { toast(e.message); return; }
