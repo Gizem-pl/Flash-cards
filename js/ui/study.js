@@ -1,5 +1,5 @@
 // Full-screen review session.
-import { h, clear, icon, actionSheet, confirmDialog, toast } from './dom.js';
+import { h, clear, icon, actionSheet, confirmDialog, toast, dismiss } from './dom.js';
 import { app, isDark } from './app.js';
 import { StudySession, PracticeSession } from '../core/session.js';
 import { RATINGS, RATING_NAMES } from '../core/scheduler.js';
@@ -44,13 +44,13 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
     body);
   document.body.appendChild(overlay);
   const keyHandler = (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || document.querySelector('.backdrop')) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || document.querySelector('.backdrop:not(.leaving)')) return;
     if (handleKey(e.key, e.ctrlKey || e.metaKey)) e.preventDefault();
   };
   document.addEventListener('keydown', keyHandler);
 
   function handleKey(key, ctrl) {
-    if (document.querySelector('.backdrop')) return false;
+    if (document.querySelector('.backdrop:not(.leaving)')) return false;
     if (ctrl && key.toLowerCase() === 'z') { undo(); return true; }
     if (key === 'Escape') { close(); return true; }
     if (!card) return false;
@@ -227,9 +227,9 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
     audio.stop();
     frame.destroy();
     document.removeEventListener('keydown', keyHandler);
-    overlay.remove();
     col.flush();
     app.rerender();
+    dismiss(overlay);
   }
 
   clear(body, frameWrap, bar);

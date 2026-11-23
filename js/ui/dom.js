@@ -85,13 +85,24 @@ export function icon(name, cls = '') {
 
 // ---------------------------------------------------------------- overlays
 
+/** Remove an overlay after a short closing animation (instantly if motion is reduced). */
+export function dismiss(el) {
+  if (!el.isConnected || el.classList.contains('leaving')) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { el.remove(); return; }
+  el.classList.add('leaving');
+  let gone = false;
+  const rm = () => { if (!gone) { gone = true; el.remove(); } };
+  el.addEventListener('animationend', (e) => { if (e.target === el) rm(); });
+  setTimeout(rm, 400);
+}
+
 /** Bottom sheet. Returns {el, body, close}. */
 export function sheet({ title, left = 'Cancel', right = null, onRight = null, onClose = null, full = false } = {}) {
   let closed = false;
   const close = () => {
     if (closed) return;
     closed = true;
-    backdrop.remove();
+    dismiss(backdrop);
     onClose?.();
   };
   const rightBtn = right ? h('button.txt-btn.right', { onclick: () => onRight?.() }, right) : h('span', { style: { minWidth: '60px' } });
@@ -107,7 +118,7 @@ export function sheet({ title, left = 'Cancel', right = null, onRight = null, on
 
 export function actionSheet(title, actions) {
   return new Promise((resolve) => {
-    const done = (v) => { backdrop.remove(); resolve(v); };
+    const done = (v) => { dismiss(backdrop); resolve(v); };
     const group = h('div.group', title ? h('div.title', title) : null,
       actions.filter(Boolean).map((a) => h(`button${a.danger ? '.danger' : ''}`, { onclick: () => { done(a.value ?? a.label); a.run?.(); } },
         a.icon ? icon(a.icon, 'sm') : null, a.label)));
@@ -119,7 +130,7 @@ export function actionSheet(title, actions) {
 
 export function confirmDialog(title, message, { ok = 'OK', danger = false, cancel = 'Cancel' } = {}) {
   return new Promise((resolve) => {
-    const done = (v) => { wrap.remove(); resolve(v); };
+    const done = (v) => { dismiss(wrap); resolve(v); };
     const wrap = h('div.backdrop.dialog-wrap', h('div.dialog', h('h3', title), message ? h('p', message) : null,
       h('div.btn-row', cancel ? h('button.btn', { onclick: () => done(false) }, cancel) : null,
         h(`button.btn${danger ? '.danger' : '.tinted'}`, { onclick: () => done(true) }, ok))));
@@ -130,7 +141,7 @@ export function confirmDialog(title, message, { ok = 'OK', danger = false, cance
 export function promptDialog(title, { value = '', placeholder = '', ok = 'OK', message = '' } = {}) {
   return new Promise((resolve) => {
     const input = h('input', { type: 'text', value, placeholder, autocapitalize: 'off', onkeydown: (e) => { if (e.key === 'Enter') done(input.value); } });
-    const done = (v) => { wrap.remove(); resolve(v); };
+    const done = (v) => { dismiss(wrap); resolve(v); };
     const wrap = h('div.backdrop.dialog-wrap', h('div.dialog', h('h3', title), message ? h('p', message) : null, input,
       h('div.btn-row', h('button.btn', { onclick: () => done(null) }, 'Cancel'), h('button.btn.tinted', { onclick: () => done(input.value) }, ok))));
     document.body.appendChild(wrap);

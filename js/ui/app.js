@@ -49,15 +49,18 @@ function route() {
 }
 export function navigate(path) { location.hash = path; }
 
-const viewEl = h('main.view');
+const stage = h('div.stage');
 const tabbar = h('nav.tabbar');
 const scrollPos = new Map();
+let viewEl = null;
 let currentKey = '';
+let currentRoute = null;
 
-function render() {
-  const r = route();
-  const key = `${r.name}/${r.arg ?? ''}`;
-  if (currentKey) scrollPos.set(currentKey, viewEl.scrollTop);
+// how deep a screen is inside its tab: pushing deeper slides in from the right, going back slides out
+const DEPTH = { deck: 1, custom: 1, notetypes: 1, notetype: 2 };
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+function buildView(r) {
   const inner = h('div.view-inner');
   try {
     switch (r.name) {
@@ -74,13 +77,66 @@ function render() {
     console.error(e);
     inner.append(h('div.card.pad', h('b', 'Something went wrong'), h('p.muted.small', String(e.message || e))));
   }
-  clear(viewEl, inner);
-  viewEl.scrollTop = key === currentKey ? scrollPos.get(key) || 0 : scrollPos.get(key) || 0;
-  currentKey = key;
+  return inner;
+}
+
+function render() {
+  const r = route();
+  const key = `${r.name}/${r.arg ?? ''}`;
   const tab = TAB_OF[r.name] || r.name;
-  clear(tabbar, TABS.map(([id, label, ic]) => h(`button${tab === id ? '.active' : ''}`, {
-    onclick: () => { if (route().name === id) { viewEl.scrollTo({ top: 0, behavior: 'smooth' }); } navigate(`/${id}`); },
-  }, icon(ic), label)));
+
+  // same screen (data changed): swap the contents in place, keeping the scroll position
+  if (viewEl && key === currentKey) {
+    const top = viewEl.scrollTop;
+    clear(viewEl, buildView(r));
+    viewEl.scrollTop = top;
+    updateTabbar(tab);
+    return;
+  }
+
+  const prev = viewEl;
+  const prevRoute = currentRoute;
+  if (prev) scrollPos.set(currentKey, prev.scrollTop);
+  // finish any transition that is still running
+  stage.querySelectorAll('.view.leaving').forEach((v) => v.remove());
+
+  const prevTab = prevRoute ? TAB_OF[prevRoute.name] || prevRoute.name : null;
+  const d0 = prevRoute ? DEPTH[prevRoute.name] || 0 : 0;
+  const d1 = DEPTH[r.name] || 0;
+  const kind = !prev || reduceMotion.matches || prevTab !== tab || d0 === d1 ? 'swap' : d1 > d0 ? 'push' : 'pop';
+
+  const next = h('main.view', buildView(r));
+  if (kind === 'pop') stage.insertBefore(next, prev); else stage.append(next);
+  next.scrollTop = kind === 'push' ? 0 : scrollPos.get(key) || 0;
+  viewEl = next;
+  currentKey = key;
+  currentRoute = r;
+  updateTabbar(tab);
+
+  if (!prev) return;
+  if (kind === 'swap') { prev.remove(); return; }
+  prev.classList.add('leaving');
+  const opts = { duration: 380, easing: 'cubic-bezier(.2,.85,.25,1)' };
+  const top = kind === 'push' ? next : prev; // the screen that slides over the other one
+  const under = kind === 'push' ? prev : next;
+  top.classList.add('sliding');
+  const frames = kind === 'push'
+    ? [[{ transform: 'translateX(100%)' }, { transform: 'none' }], [{ transform: 'none' }, { transform: 'translateX(-28%)' }]]
+    : [[{ transform: 'none' }, { transform: 'translateX(100%)' }], [{ transform: 'translateX(-28%)' }, { transform: 'none' }]];
+  const a = top.animate(frames[0], opts);
+  under.animate(frames[1], opts);
+  const done = () => { prev.remove(); top.classList.remove('sliding'); };
+  a.onfinish = done;
+  a.oncancel = done;
+}
+
+function updateTabbar(tab) {
+  if (!tabbar.children.length) {
+    tabbar.append(...TABS.map(([id, label, ic]) => h('button', { 'data-tab': id,
+      onclick: () => { if (route().name === id) viewEl?.scrollTo({ top: 0, behavior: 'smooth' }); else navigate(`/${id}`); },
+    }, icon(ic), label)));
+  }
+  for (const b of tabbar.children) b.classList.toggle('active', b.dataset.tab === tab);
 }
 app.rerender = render;
 
@@ -156,7 +212,7 @@ async function boot() {
       h('p.muted', `This browser blocked on-device storage (${e.message || e}). Private browsing modes don't allow saving decks.`)))));
     return;
   }
-  clear(root, viewEl, tabbar, fileInput);
+  clear(root, stage, tabbar, fileInput);
   window.addEventListener('hashchange', render);
   // keep data safe when the app is backgrounded
   document.addEventListener('visibilitychange', () => { if (document.hidden) app.col.flush(); else render(); });

@@ -38,12 +38,19 @@ export function decksView(root) {
     return;
   }
 
+  // random practice from everything
+  root.append(h('h2.section', 'Practice'));
+  root.append(h('div.list',
+    h('button.row.tap', { onclick: () => openStudy(tree.map((n) => n.deck.id), { practice: true }) }, icon('zap', 'sm ic'),
+      h('div.grow', h('div', 'Random 25'), h('div.sub', 'Mixed from all your decks · doesn’t change your schedule')), icon('right', 'sm chev'))));
+
   root.append(h('h2.section', 'Your decks'));
+  const dropTop = h('div.drop-top.hidden', icon('left', 'sm'), 'Move out of folder');
   const list = h('div.list');
   const walk = (nodes, depth) => {
     for (const n of nodes) {
       const open = !n.deck.collapsed;
-      list.append(h(`div.deck-row${depth ? '.child' : ''}`, { style: { paddingLeft: `${6 + depth * 18}px`, '--indent': `${32 + depth * 18}px` } },
+      list.append(h(`div.deck-row${depth ? '.child' : ''}`, { 'data-did': n.deck.id, style: { paddingLeft: `${6 + depth * 18}px`, '--indent': `${32 + depth * 18}px` } },
         n.children.length
           ? h(`button.toggle${open ? '.open' : ''}`, { 'aria-label': open ? 'Collapse' : 'Expand', onclick: () => { n.deck.collapsed = open; col.saveDeck(n.deck); app.rerender(); } }, icon('right', 'sm'))
           : h('span.toggle'),
@@ -55,7 +62,8 @@ export function decksView(root) {
     }
   };
   walk(tree, 0);
-  root.append(list);
+  root.append(dropTop, list, h('p.hint', 'Touch and hold a deck, then drag it onto another deck to put them in a folder.'));
+  enableDeckDrag(list, dropTop);
 
   // custom decks: groups of decks studied together
   root.append(h('h2.section', 'Custom decks'));
@@ -72,12 +80,172 @@ export function decksView(root) {
     }),
     h('button.row.tap', { onclick: () => editCustomDeck() }, icon('folderplus', 'sm ic'),
       h('div.grow', h('div', 'Create custom deck'), h('div.sub', 'Combine decks, e.g. Day 1 + Day 51')), icon('right', 'sm chev'))));
+}
 
-  // random practice from everything
-  root.append(h('h2.section', 'Practice'));
-  root.append(h('div.list',
-    h('button.row.tap', { onclick: () => openStudy(tree.map((n) => n.deck.id), { practice: true }) }, icon('zap', 'sm ic'),
-      h('div.grow', h('div', 'Random 25'), h('div.sub', 'Mixed from all your decks · doesn’t change your schedule')), icon('right', 'sm chev'))));
+// ---------------------------------------------------------------- drag a deck into a folder
+// Folders are parent decks ("Folder::Deck"), exactly like Anki, so they survive export/import.
+
+const leaf = (name) => name.split('::').pop();
+const parentOf = (name) => name.split('::').slice(0, -1).join('::');
+const isInside = (name, anc) => name.toLowerCase().startsWith(`${anc.toLowerCase()}::`);
+
+function enableDeckDrag(list, dropTop) {
+  const HOLD_MS = 380;
+  let st = null; // { row, deck, x, y, timer, ghost, dx, dy, target, mouse }
+
+  const begin = () => {
+    const { row } = st;
+    const r = row.getBoundingClientRect();
+    const ghost = row.cloneNode(true);
+    ghost.classList.add('drag-ghost');
+    Object.assign(ghost.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    document.body.append(ghost);
+    row.classList.add('lifted');
+    st.ghost = ghost;
+    st.dx = st.x - r.left;
+    st.dy = st.y - r.top;
+    if (parentOf(st.deck.name)) dropTop.classList.remove('hidden');
+    navigator.vibrate?.(10);
+    autoScroll();
+  };
+
+  const move = (x, y) => {
+    st.x = x; st.y = y;
+    st.ghost.style.left = `${x - st.dx}px`;
+    st.ghost.style.top = `${y - st.dy}px`;
+    const hit = document.elementFromPoint(x, y);
+    let target = null;
+    const zr = dropTop.classList.contains('hidden') ? null : dropTop.getBoundingClientRect();
+    if (zr && x >= zr.left && x <= zr.right && y >= zr.top - 10 && y <= zr.bottom + 10) target = 'top';
+    else {
+      const row = hit?.closest?.('.deck-row[data-did]');
+      if (row && list.contains(row)) {
+        const d = app.col.deck(Number(row.dataset.did));
+        if (d && d.id !== st.deck.id && !isInside(d.name, st.deck.name)) target = row;
+      }
+    }
+    if (target !== st.target) {
+      (st.target === 'top' ? dropTop : st.target)?.classList.remove('drop-into');
+      (target === 'top' ? dropTop : target)?.classList.add('drop-into');
+      st.target = target;
+    }
+  };
+
+  const autoScroll = () => {
+    if (!st?.ghost) return;
+    const view = list.closest('.view');
+    if (view) {
+      const r = view.getBoundingClientRect();
+      const edge = 70;
+      const bottom = r.bottom - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tabbar-h') || 58) - 20;
+      let v = 0;
+      if (st.y < r.top + edge) v = -Math.ceil((r.top + edge - st.y) / 6);
+      else if (st.y > bottom - edge) v = Math.ceil((st.y - (bottom - edge)) / 6);
+      if (v && st.target !== 'top') { view.scrollTop += v; move(st.x, st.y); }
+    }
+    requestAnimationFrame(autoScroll);
+  };
+
+  const end = (drop) => {
+    if (!st) return;
+    clearTimeout(st.timer);
+    const s = st;
+    st = null;
+    if (!s.ghost) return false;
+    s.ghost.remove();
+    s.row.classList.remove('lifted');
+    (s.target === 'top' ? dropTop : s.target)?.classList.remove('drop-into');
+    dropTop.classList.add('hidden');
+    // swallow the click that follows the drag
+    const swallow = (e) => { e.stopPropagation(); e.preventDefault(); };
+    window.addEventListener('click', swallow, true);
+    setTimeout(() => window.removeEventListener('click', swallow, true), 350);
+    if (drop && s.target) {
+      const target = s.target === 'top' ? null : app.col.deck(Number(s.target.dataset.did));
+      setTimeout(() => dropDeck(s.deck, target), 0);
+    }
+    return true;
+  };
+
+  const start = (e, x, y, mouse) => {
+    const row = e.target.closest('.deck-row[data-did]');
+    if (!row || e.target.closest('.more-btn, .toggle')) return;
+    const deck = app.col.deck(Number(row.dataset.did));
+    if (!deck) return;
+    st = { row, deck, x, y, sx: x, sy: y, mouse, target: null, ghost: null };
+    if (!mouse) st.timer = setTimeout(() => { if (st && !st.ghost) begin(); }, HOLD_MS);
+  };
+
+  // touch: hold, then drag (moving before the hold scrolls the page as usual)
+  list.addEventListener('touchstart', (e) => { if (e.touches.length === 1) start(e, e.touches[0].clientX, e.touches[0].clientY, false); else end(false); }, { passive: true });
+  list.addEventListener('touchmove', (e) => {
+    if (!st) return;
+    const t = e.touches[0];
+    if (!st.ghost) {
+      if (Math.hypot(t.clientX - st.sx, t.clientY - st.sy) > 8) { clearTimeout(st.timer); st = null; }
+      return;
+    }
+    e.preventDefault();
+    move(t.clientX, t.clientY);
+  }, { passive: false });
+  list.addEventListener('touchend', (e) => { if (end(true)) e.preventDefault(); });
+  list.addEventListener('touchcancel', () => end(false));
+  list.addEventListener('contextmenu', (e) => { if (st) e.preventDefault(); });
+
+  // mouse: press and drag
+  list.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    start(e, e.clientX, e.clientY, true);
+    if (!st) return;
+    const mm = (ev) => {
+      if (!st) return;
+      if (!st.ghost) {
+        if (Math.hypot(ev.clientX - st.sx, ev.clientY - st.sy) < 6) return;
+        begin();
+      }
+      ev.preventDefault();
+      move(ev.clientX, ev.clientY);
+    };
+    const mu = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); end(true); };
+    window.addEventListener('mousemove', mm);
+    window.addEventListener('mouseup', mu);
+  });
+}
+
+/** Dropped `deck` onto `target` (null = the "move out of folder" area). */
+async function dropDeck(deck, target) {
+  const col = app.col;
+  const run = (fn, msg) => { try { fn(); toast(msg); } catch (e) { toast(e.message); } app.rerender(); };
+  const moveTo = (d, parent) => col.renameDeck(d.id, parent ? `${parent}::${leaf(d.name)}` : leaf(d.name));
+
+  if (!target) {
+    const up = parentOf(parentOf(deck.name));
+    run(() => moveTo(deck, up), up ? `Moved to ${leaf(up)}` : 'Moved out of folder');
+    return;
+  }
+  const canMoveInto = parentOf(deck.name).toLowerCase() !== target.name.toLowerCase();
+  const canGroup = !isInside(deck.name, target.name);
+  const choice = await actionSheet(`Move “${leaf(deck.name)}”`, [
+    canMoveInto ? { label: `Put inside “${leaf(target.name)}”`, icon: 'right', value: 'into' } : null,
+    canGroup ? { label: `New folder with “${leaf(target.name)}”`, icon: 'folderplus', value: 'group' } : null,
+  ]);
+  if (choice === 'into') {
+    run(() => moveTo(deck, target.name), `Moved into ${leaf(target.name)}`);
+  } else if (choice === 'group') {
+    const name = (await promptDialog('New folder', { placeholder: 'Folder name', ok: 'Create' }))?.trim().replace(/::/g, ' ');
+    if (!name) return;
+    const parent = parentOf(target.name);
+    const folder = parent ? `${parent}::${name}` : name;
+    if (leaf(deck.name).toLowerCase() === leaf(target.name).toLowerCase()) { toast('Both decks have the same name'); return; }
+    const clash = [deck, target].find((d) => { const x = col.deckByName(`${folder}::${leaf(d.name)}`); return x && x.id !== d.id; });
+    if (clash) { toast(`${name} already has a deck named ${leaf(clash.name)}`); return; }
+    run(() => {
+      // the target's id stays fixed, so fetch both by id after each rename
+      const t = col.deck(target.id);
+      moveTo(t, folder);
+      moveTo(col.deck(deck.id), folder);
+    }, `Created folder ${name}`);
+  }
 }
 
 async function customActions(cd) {
