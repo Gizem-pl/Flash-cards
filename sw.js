@@ -1,6 +1,7 @@
-// Offline support: the app shell is precached; app files update in the background;
+// Offline support: the app shell is precached; app files come from the network when online
+// (so a launch never mixes old and new files) and from the cache when offline;
 // the CDN libraries (JSZip, sql.js, fzstd, MathJax) are cached the first time they're used.
-const VERSION = 'v6';
+const VERSION = 'v7';
 const SHELL = `shell-${VERSION}`;
 const CDN = 'cdn-v1';
 const FILES = [
@@ -50,11 +51,18 @@ self.addEventListener('fetch', (e) => {
     }));
     return;
   }
-  // stale-while-revalidate for the app itself
+  // network first for the app itself, falling back to the cached copy when offline
   e.respondWith(caches.open(SHELL).then(async (c) => {
     const key = url.pathname.endsWith('/') ? './' : req;
-    const hit = await c.match(key, { ignoreSearch: true });
-    const network = fetch(req).then((res) => { if (res.ok) c.put(key, res.clone()); return res; }).catch(() => hit);
-    return hit || network;
+    const cached = () => c.match(key, { ignoreSearch: true });
+    const network = fetch(req, { cache: 'no-cache' }).then((res) => { if (res.ok) c.put(key, res.clone()); return res; });
+    // on a very slow connection, use the cached copy after a few seconds
+    const slow = new Promise((r) => setTimeout(r, 3000)).then(cached);
+    try {
+      const res = await Promise.race([network, slow.then((hit) => hit || network)]);
+      return res;
+    } catch {
+      return (await cached()) || Response.error();
+    }
   }));
 });

@@ -97,7 +97,7 @@ export function dismiss(el) {
 }
 
 /** Bottom sheet. Returns {el, body, close}. */
-export function sheet({ title, left = 'Cancel', right = null, onRight = null, onClose = null, full = false } = {}) {
+export function sheet({ title, left = 'Cancel', right = null, onRight = null, onClose = null, full = false, instant = false } = {}) {
   let closed = false;
   const close = () => {
     if (closed) return;
@@ -111,7 +111,7 @@ export function sheet({ title, left = 'Cancel', right = null, onRight = null, on
     h('div.grabber'),
     h('div.sheet-head', left ? h('button.txt-btn', { onclick: close }, left) : h('span', { style: { minWidth: '60px' } }), h('h3', title || ''), rightBtn),
     body);
-  const backdrop = h('div.backdrop', { onclick: close }, el);
+  const backdrop = h(`div.backdrop${instant ? '.instant' : ''}`, { onclick: close }, el);
   document.body.appendChild(backdrop);
   return { el, body, close, rightBtn, setTitle: (t) => { el.querySelector('h3').textContent = t; } };
 }

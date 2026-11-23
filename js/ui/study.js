@@ -223,13 +223,13 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
   }
 
   function close() {
-    clearTimeout(waitTimer);
-    audio.stop();
-    frame.destroy();
+    dismiss(overlay);
     document.removeEventListener('keydown', keyHandler);
+    clearTimeout(waitTimer);
+    try { audio.stop(); } catch (e) { console.error(e); }
+    try { frame.destroy(); } catch (e) { console.error(e); }
     col.flush();
     app.rerender();
-    dismiss(overlay);
   }
 
   clear(body, frameWrap, bar);

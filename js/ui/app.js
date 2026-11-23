@@ -159,18 +159,31 @@ export async function importFile(file) {
   try {
     navigator.storage?.persist?.().catch(() => {});
     const summary = await importPackage(file, app.col, { onProgress: (m, f) => p.update(m, f) });
-    p.close();
+    // update the screen underneath first, then swap the progress box for the result sheet
+    // on the same dimmed background, so nothing blinks
+    resetViewport();
+    render();
     showImportResult(summary);
+    p.close();
   } catch (e) {
     p.close();
     console.error(e);
     toast(`Import failed: ${e.message || e}`);
+    resetViewport();
+    render();
   }
-  render();
+}
+
+// iOS can leave the page scrolled after the file picker or keyboard closes, which makes
+// taps land in the wrong place until the app is restarted. The page itself never scrolls.
+function resetViewport() {
+  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+  if (document.documentElement.scrollTop) document.documentElement.scrollTop = 0;
+  if (document.body.scrollTop) document.body.scrollTop = 0;
 }
 
 function showImportResult(s) {
-  const sh = sheet({ title: 'Import complete', left: null, right: 'Done', onRight: () => sh.close() });
+  const sh = sheet({ title: 'Import complete', left: null, right: 'Done', onRight: () => sh.close(), instant: true });
   const row = (label, v, ic) => h('div.row', icon(ic, 'sm ic'), h('div.grow', label), h('b.num', String(v)));
   sh.body.append(
     h('div.center', { style: { padding: '8px 0 18px' } },
@@ -179,7 +192,7 @@ function showImportResult(s) {
     h('div.list', row('Notes added', s.notesAdded, 'plus'), s.notesUpdated ? row('Notes updated', s.notesUpdated, 'reset') : null,
       s.notesUnchanged ? row('Already in collection', s.notesUnchanged, 'check') : null, row('Cards added', s.cardsAdded, 'layers'),
       row('Media files', s.mediaFiles, 'image'), s.notetypesAdded ? row('Note types added', s.notetypesAdded, 'note') : null),
-    s.warnings.length ? h('p.small.muted', { style: { marginTop: '12px' } }, [...new Set(s.warnings)].join(' ')) : null,
+    s.warnings.length ? h('p.small.muted', { style: { marginTop: '12px' } }, [...new Set(s.warnings)].join(' ')) : '',
     h('button.btn.primary', { style: { marginTop: '18px' }, onclick: () => { sh.close(); navigate('/decks'); } }, 'Start studying'));
 }
 
@@ -215,7 +228,8 @@ async function boot() {
   clear(root, stage, tabbar, fileInput);
   window.addEventListener('hashchange', render);
   // keep data safe when the app is backgrounded
-  document.addEventListener('visibilitychange', () => { if (document.hidden) app.col.flush(); else render(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) app.col.flush(); else { resetViewport(); render(); } });
+  window.addEventListener('focus', resetViewport);
   window.addEventListener('pagehide', () => app.col.flush());
   // drag & drop import (desktop)
   window.addEventListener('dragover', (e) => e.preventDefault());

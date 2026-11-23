@@ -20,10 +20,10 @@ code#typeans { display: inline-block; border: none; text-align: left; font-famil
 .typeGood { background: rgba(52,199,89,.3); border-radius: 3px; } .typeBad { background: rgba(255,59,48,.3); border-radius: 3px; } .typeMissed { background: rgba(142,142,147,.3); border-radius: 3px; }
 .cloze { font-weight: bold; color: blue; } .nightMode .cloze { color: lightblue; }
 a.hint { color: #5F7161; }
-#qa { transition: opacity .16s ease; }
+#stage { position: absolute; left: -10000px; top: 0; width: 100%; visibility: hidden; pointer-events: none; }
 .template-error { color: #ff3b30; font-size: 14px; }
 </style><style id="cardcss"></style></head>
-<body class="card"><div id="qa"></div>
+<body class="card"><div id="qa"></div><div id="stage" aria-hidden="true"></div>
 <script>
 var mj = null;
 function loadMathJax() {
@@ -38,28 +38,39 @@ function send(m) { parent.postMessage(m, '*'); }
 window.addEventListener('message', function (e) {
   var d = e.data || {};
   if (d.type === 'show') {
+    var qa = document.getElementById('qa');
+    var seq = ++showSeq;
+    // build the new card off-screen and wait (briefly) for its pictures to decode,
+    // then swap it in at once: no blank frame, no pictures popping in late
+    var stage = document.getElementById('stage');
+    stage.innerHTML = d.html;
+    var imgs = Array.prototype.slice.call(stage.querySelectorAll('img'));
+    var ready = imgs.length ? Promise.race([
+      Promise.all(imgs.map(function (im) { return im.decode ? im.decode().catch(function () {}) : null; })),
+      new Promise(function (r) { setTimeout(r, 400); })]) : Promise.resolve();
+    ready.then(function () { if (seq === showSeq) place(d, qa, stage); });
+  } else if (d.type === 'getTyped') {
+    var el = document.getElementById('typeans');
+    send({ type: 'typed', id: d.id, value: el && el.value !== undefined ? el.value : '' });
+  }
+});
+var showSeq = 0;
+function place(d, qa, stage) {
     document.getElementById('cardcss').textContent = d.css;
     document.body.className = d.cls;
-    var qa = document.getElementById('qa');
-    qa.style.opacity = 0;
-    qa.innerHTML = d.html;
+    qa.replaceChildren.apply(qa, Array.prototype.slice.call(stage.childNodes));
     qa.querySelectorAll('script').forEach(function (old) {
       var s = document.createElement('script');
       for (var i = 0; i < old.attributes.length; i++) s.setAttribute(old.attributes[i].name, old.attributes[i].value);
       s.textContent = old.textContent; old.parentNode.replaceChild(s, old);
     });
     if (/\\\\\\(|\\\\\\[/.test(d.html)) loadMathJax().then(function () { if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([qa]); });
-    requestAnimationFrame(function () { qa.style.opacity = 1; });
     var ans = document.getElementById('answer');
     if (ans && ans.getBoundingClientRect().top > innerHeight * 0.6) scrollTo({ top: ans.offsetTop - 40, behavior: 'smooth' });
     else if (!ans) scrollTo(0, 0);
     var t = document.getElementById('typeans');
     if (t && t.tagName === 'INPUT') { t.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); send({ type: 'ans' }); } }); if (d.focus) setTimeout(function () { t.focus(); }, 60); }
-  } else if (d.type === 'getTyped') {
-    var el = document.getElementById('typeans');
-    send({ type: 'typed', id: d.id, value: el && el.value !== undefined ? el.value : '' });
-  }
-});
+}
 document.addEventListener('click', function (e) {
   var play = e.target.closest('[data-play]');
   if (play) { e.preventDefault(); var p = play.getAttribute('data-play').split(':'); send({ type: 'play', side: p[0], idx: +p[1] }); return; }
