@@ -42,7 +42,7 @@ export function decksView(root) {
   root.append(h('h2.section', 'Practice'));
   root.append(h('div.list',
     h('button.row.tap', { onclick: () => openStudy(tree.map((n) => n.deck.id), { practice: true }) }, icon('zap', 'sm ic'),
-      h('div.grow', h('div', 'Random 30'), h('div.sub', 'Unseen cards first, from all your decks')), icon('right', 'sm chev'))));
+      h('div.grow', h('div', 'Random 25'), h('div.sub', 'Unseen cards first, from all your decks')), icon('right', 'sm chev'))));
 
   root.append(h('h2.section', 'Your decks'));
   const dropTop = h('div.drop-top.hidden', icon('left', 'sm'), 'Move out of folder');
@@ -252,7 +252,7 @@ async function customActions(cd) {
   const c = customCounts(cd);
   await actionSheet(cd.name, [
     c.new + c.learning + c.review ? { label: 'Study now', icon: 'play', run: () => openStudy(cd.deckIds) } : null,
-    { label: 'Random 30', icon: 'zap', run: () => openStudy(cd.deckIds, { practice: true }) },
+    { label: 'Random 25', icon: 'zap', run: () => openStudy(cd.deckIds, { practice: true }) },
     { label: 'Open', icon: 'right', run: () => navigate(`/custom/${cd.id}`) },
     { label: 'Edit', icon: 'edit', run: () => editCustomDeck(cd) },
   ]);
@@ -265,7 +265,7 @@ async function deckActions(n) {
   const total = n.counts.new + n.counts.learning + n.counts.review;
   await actionSheet(n.deck.name, [
     total ? { label: 'Study now', icon: 'play', run: () => openStudy(n.deck.id) } : null,
-    { label: 'Random 30', icon: 'zap', run: () => openStudy(n.deck.id, { practice: true }) },
+    { label: 'Random 25', icon: 'zap', run: () => openStudy(n.deck.id, { practice: true }) },
     { label: 'Open deck', icon: 'right', run: () => navigate(`/deck/${n.deck.id}`) },
     { label: 'Add note', icon: 'edit', run: () => openEditor({ deckId: n.deck.id }) },
   ]);

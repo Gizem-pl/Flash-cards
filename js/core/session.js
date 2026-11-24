@@ -196,7 +196,7 @@ export class StudySession {
  * Answers are scheduled with Anki's 4-button scheduler, exactly like a normal study session.
  */
 export class PracticeSession extends StudySession {
-  constructor(col, deckIds, size = 30) {
+  constructor(col, deckIds, size = 25) {
     super(col, deckIds);
     this.practice = true;
     this.size = size;

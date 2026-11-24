@@ -31,8 +31,8 @@ export function overviewView(root, deckId) {
     total ? h('button.btn.primary', { onclick: () => openStudy(deckId) }, icon('play', 'sm'), 'Study now')
       : h('div.done-msg', icon('check'), h('div', 'Congratulations! You have finished this deck for now.')),
     node.total ? h('button.btn.tinted.block', { style: { marginTop: '10px' }, onclick: () => openStudy(deckId, { practice: true }) },
-      icon('zap', 'sm'), 'Random 30') : null));
-  if (node.total) root.append(h('p.hint', 'Random 30 picks cards you haven’t answered yet first, mixed from this whole deck. Once you’ve seen them all, it picks from every card. Your answers count toward your schedule.'));
+      icon('zap', 'sm'), 'Random 25') : null));
+  if (node.total) root.append(h('p.hint', 'Random 25 picks cards you haven’t answered yet first, mixed from this whole deck. Once you’ve seen them all, it picks from every card. Your answers count toward your schedule.'));
 
   root.append(h('h2.section', 'New cards per day'), dailyLimitPicker(deckId));
 

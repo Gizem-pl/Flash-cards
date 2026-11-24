@@ -28,8 +28,8 @@ export function customView(root, id) {
     h('div.bigcounts', big('New', c.new, 'var(--new)'), big('Learning', c.learning, 'var(--learn)'), big('Review', c.review, 'var(--review)')),
     total ? h('button.btn.primary', { onclick: () => openStudy(cd.deckIds) }, icon('play', 'sm'), 'Study now')
       : h('div.done-msg', icon('check'), h('div', cd.deckIds.length ? 'Nothing is due in these decks right now.' : 'Add some decks to this custom deck.')),
-    cards ? h('button.btn.tinted.block', { style: { marginTop: '10px' }, onclick: () => openStudy(cd.deckIds, { practice: true }) }, icon('zap', 'sm'), 'Random 30') : null));
-  root.append(h('p.hint', 'Study now follows your schedule for all the decks below together. Random 30 picks cards you haven’t answered yet first, mixed from all of them. Your answers count toward your schedule.'));
+    cards ? h('button.btn.tinted.block', { style: { marginTop: '10px' }, onclick: () => openStudy(cd.deckIds, { practice: true }) }, icon('zap', 'sm'), 'Random 25') : null));
+  root.append(h('p.hint', 'Study now follows your schedule for all the decks below together. Random 25 picks cards you haven’t answered yet first, mixed from all of them. Your answers count toward your schedule.'));
 
   root.append(h('h2.section', `Decks (${cd.deckIds.length})`));
   root.append(h('div.list',
