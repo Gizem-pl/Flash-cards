@@ -154,10 +154,13 @@ export function notetypeEditorView(root, id) {
     render();
   }
   function addTemplate() {
-    const n = nt.tmpls.length + 1;
+    // a number no existing or just-deleted card type has, so save() can't mix up their cards
+    const ord = Math.max(-1, ...nt.tmpls.map((t) => t.ord), ...(nt._deletedOrds || [])) + 1;
+    let n = nt.tmpls.length + 1;
+    while (nt.tmpls.some((t) => t.name === `Card ${n}`)) n++;
     const front = nt.flds[1]?.name || nt.flds[0].name;
-    nt.tmpls.push({ name: `Card ${n}`, ord: n - 1, qfmt: `{{${front}}}`, afmt: `{{FrontSide}}\n\n<hr id=answer>\n\n{{${nt.flds[0].name}}}`, bqfmt: '', bafmt: '', did: null });
-    tIdx = n - 1;
+    nt.tmpls.push({ name: `Card ${n}`, ord, qfmt: `{{${front}}}`, afmt: `{{FrontSide}}\n\n<hr id=answer>\n\n{{${nt.flds[0].name}}}`, bqfmt: '', bafmt: '', did: null });
+    tIdx = nt.tmpls.length - 1;
     render();
   }
   async function deleteTemplate() {

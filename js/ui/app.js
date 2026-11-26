@@ -64,6 +64,8 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 function buildView(r) {
   const inner = h('div.view-inner');
   try {
+    // a new day: un-bury yesterday's buried and set-aside cards before any screen counts them
+    app.col.unburyIfNeeded();
     switch (r.name) {
       case 'deck': overviewView(inner, Number(r.arg)); break;
       case 'custom': customView(inner, Number(r.arg)); break;

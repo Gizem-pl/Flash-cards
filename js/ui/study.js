@@ -20,6 +20,7 @@ export function openStudy(deckId, { practice = false, size = 25, later = false, 
   const col = app.col;
   let session;
   try {
+    col.unburyIfNeeded(); // the screen may have been open since yesterday
     session = later ? new LaterSession(col, size) : cards ? new CardsSession(col, cards)
       : practice ? new PracticeSession(col, deckId, size) : new StudySession(col, deckId);
   } catch (e) { toast(e.message); return; }

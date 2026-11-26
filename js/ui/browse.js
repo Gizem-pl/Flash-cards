@@ -91,7 +91,8 @@ export const displayText = (s) => String(s || '').replace(/\{\{c\d+::([\s\S]*?)(
 
 function dueText(c, today) {
   if (c.type === 0) return `New #${c.due}`;
-  if (c.queue === 1) return 'Learning';
+  // intraday (re)learning cards are due at a time, not a day — also while buried or suspended
+  if (c.queue === 1 || c.due > 1e9) return 'Learning';
   const d = c.due - today;
   const when = d === 0 ? 'due today' : d < 0 ? `${-d}d overdue` : `due in ${formatInterval(d * 86400)}`;
   return `${when} · ivl ${formatInterval(c.ivl * 86400)}`;
@@ -106,8 +107,13 @@ export function cardInfo(cid) {
   const rows = [row('Added', new Date(c.nid).toLocaleDateString()), row('Reviews', String(c.reps)), row('Lapses', String(c.lapses))];
   if (c.type === 2 || c.type === 3) {
     rows.push(row('Interval', formatInterval(c.ivl * 86400)), row('Ease', `${Math.round(c.factor / 10)}%`));
-    const d = c.due - col.today;
-    rows.push(row('Due', d === 0 ? 'Today' : d > 0 ? `In ${d} days` : `${-d} days ago`));
+    if (c.due > 1e9) {
+      // relearning step: due at a time today
+      rows.push(row('Due', c.due <= col.now ? 'Now' : `In ${formatInterval(c.due - col.now)}`));
+    } else {
+      const d = c.due - col.today;
+      rows.push(row('Due', d === 0 ? 'Today' : d > 0 ? `In ${d} days` : `${-d} days ago`));
+    }
   }
   if (c.s > 0) rows.push(row('Stability', `${c.s.toFixed(1)} days`), row('Difficulty', `${Math.round((c.d - 1) / 9 * 100)}%`));
   sh.body.append(h('div.list', rows));
