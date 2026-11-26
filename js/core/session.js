@@ -12,6 +12,7 @@ export class StudySession {
     this.learning = [];
     this.main = [];
     this.undoStack = [];
+    this.front = null; // card id that Undo brought back
     this.rebuild();
   }
 
@@ -99,6 +100,12 @@ export class StudySession {
 
   nextCard() {
     const now = this.col.now;
+    // a card brought back by Undo is shown again straight away (like Anki), even if a learning card is due
+    if (this.front) {
+      const c = this.main.find((x) => x.id === this.front) || this.learning.find((x) => x.id === this.front);
+      if (c) return c;
+      this.front = null;
+    }
     if (this.learning[0] && this.learning[0].due <= now) return this.learning[0];
     if (this.main[0]) return this.main[0];
     if (this.learning[0] && this.learning[0].due <= now + this.col.learnAhead) return this.learning[0];
@@ -123,10 +130,11 @@ export class StudySession {
 
   answer(card, rating, timeMs) {
     const col = this.col;
+    this.front = null;
     const ctx = this.context(card);
     const result = answerCard(card, rating, ctx);
     const cfg = ctx.config;
-    const entry = { before: { ...card }, revlogId: 0, siblings: [], noteTags: null, newDelta: 0, reviewDelta: 0, learning: [...this.learning], main: [...this.main] };
+    const entry = { kind: 'answer', before: { ...card }, revlogId: 0, siblings: [], noteTags: null, newDelta: 0, reviewDelta: 0, learning: [...this.learning], main: [...this.main] };
     const updated = result.card;
     if (result.leech) {
       const note = col.note(card.nid);
@@ -156,22 +164,59 @@ export class StudySession {
       const i = this.learning.findIndex((c) => c.due > updated.due);
       this.learning.splice(i < 0 ? this.learning.length : i, 0, updated);
     }
-    this.undoStack.push(entry);
-    if (this.undoStack.length > 30) this.undoStack.shift();
+    this.pushUndo(entry);
     return result;
   }
+
+  pushUndo(entry) {
+    this.undoStack.push(entry);
+    if (this.undoStack.length > 30) this.undoStack.shift();
+  }
+
+  /**
+   * Runs a change to some cards made from the study menu (bury, suspend, flag, reset) so that Undo can revert it.
+   * `showId` is the card on screen, which comes back first after the undo.
+   */
+  change(label, ids, showId, fn) {
+    const col = this.col;
+    const cards = ids.map((id) => col.card(id)).filter(Boolean).map((c) => ({ ...c }));
+    const oldLog = new Set(ids.flatMap((id) => col.revlogFor(id).map((r) => r.id)));
+    const entry = { kind: 'change', label, cards, showId, learning: [...this.learning], main: [...this.main] };
+    fn();
+    entry.revlogIds = ids.flatMap((id) => col.revlogFor(id).map((r) => r.id)).filter((id) => !oldLog.has(id));
+    this.pushUndo(entry);
+  }
+
+  /** What the next Undo would revert, for the toast. */
+  get undoLabel() { const e = this.undoStack[this.undoStack.length - 1]; return e ? (e.kind === 'change' ? e.label : 'answer') : null; }
 
   undo() {
     const e = this.undoStack.pop();
     if (!e) return null;
     const col = this.col;
-    col.saveCard(e.before);
+    // the saved queues hold the cards as they were; use the current copies and drop any that were buried,
+    // suspended or deleted since
+    const fresh = (list, ok) => list.map((c) => col.card(c.id)).filter((c) => c && ok(c));
+    const inMain = (c) => c.queue >= 0;
+    const inLearning = (c) => c.queue === Queue.Learning;
+    if (e.kind === 'change') {
+      e.cards.forEach((c) => col.saveCard({ ...c }));
+      e.revlogIds.forEach((id) => col.removeRevlog(id));
+      this.learning = fresh(e.learning, inLearning);
+      this.main = fresh(e.main, inMain);
+      const shown = col.card(e.showId);
+      if (shown && shown.queue >= 0 && !this.main.some((c) => c.id === shown.id) && !this.learning.some((c) => c.id === shown.id)) this.main.unshift(shown);
+      this.front = shown ? shown.id : null;
+      return shown;
+    }
+    col.saveCard({ ...e.before });
     col.removeRevlog(e.revlogId);
-    e.siblings.forEach((s) => col.saveCard(s));
+    e.siblings.forEach((s) => col.saveCard({ ...s }));
     if (e.noteTags) { const n = col.note(e.before.nid); if (n) { n.tags = e.noteTags; col._put('notes', n); } }
     if (e.newDelta + e.reviewDelta) col.incrementToday(e.before.did, -e.newDelta, -e.reviewDelta);
-    this.learning = e.learning.filter((c) => c.id !== e.before.id);
-    this.main = [col.card(e.before.id), ...e.main.filter((c) => c.id !== e.before.id)];
+    this.learning = fresh(e.learning.filter((c) => c.id !== e.before.id), inLearning);
+    this.main = [col.card(e.before.id), ...fresh(e.main.filter((c) => c.id !== e.before.id), inMain)];
+    this.front = e.before.id;
     return e.before;
   }
 
@@ -201,7 +246,8 @@ export class PracticeSession extends StudySession {
     this.practice = true;
     this.size = size;
     const ids = new Set(this.deckIds.filter((id) => col.deck(id)).flatMap((id) => col.deckAndDescendantIds(id)));
-    const pool = [...col.cards.values()].filter((c) => ids.has(c.did) && c.queue !== Queue.Suspended);
+    // like Anki's filtered decks: suspended and buried cards are left out
+    const pool = [...col.cards.values()].filter((c) => ids.has(c.did) && c.queue >= 0);
     const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     const unseen = shuffle(pool.filter((c) => c.type === CardType.New));
     const seen = unseen.length >= size ? [] : shuffle(pool.filter((c) => c.type !== CardType.New));

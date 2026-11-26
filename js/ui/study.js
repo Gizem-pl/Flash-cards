@@ -21,6 +21,7 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
   if (practice && !session.total) { toast('There are no cards to practise here.'); return; }
 
   let card = null, rendered = null, showingAnswer = false, previews = null, shownAt = Date.now(), reviewed = 0, waitTimer = null, cfg = null;
+  let day = col.today;
 
   const frame = new CardFrame(col, {
     onTap: () => { if (!showingAnswer && app.prefs.tapToReveal) reveal(); },
@@ -48,6 +49,15 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
     if (handleKey(e.key, e.ctrlKey || e.metaKey)) e.preventDefault();
   };
   document.addEventListener('keydown', keyHandler);
+  // left open past the start of a new day (e.g. overnight in the background): load the new day's cards
+  const visHandler = () => {
+    if (document.hidden || col.today === day) return;
+    day = col.today;
+    session.undoStack = [];
+    session.rebuild();
+    if (!showingAnswer || !card) loadNext(); else renderCounts();
+  };
+  document.addEventListener('visibilitychange', visHandler);
 
   function handleKey(key, ctrl) {
     if (document.querySelector('.backdrop:not(.leaving)')) return false;
@@ -94,9 +104,8 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
       session.remove([card.id]);
       return loadNext();
     }
-    if (!frameWrap.isConnected) clear(body, frameWrap, bar);
-    flagEl.innerHTML = '';
-    if (card.flags & 7) flagEl.append(h('span', { style: { color: FLAG_COLORS[card.flags & 7] } }, icon('flag', 'sm')));
+    showCardView();
+    showFlag();
     frame.show(rendered.question, rendered.css, cls(), true);
     shownAt = Date.now();
     renderBar();
@@ -141,9 +150,10 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
 
   function undo() {
     if (!session.canUndo) return;
-    session.undo();
-    reviewed = Math.max(0, reviewed - 1);
-    toast('Undone');
+    const what = session.undoLabel;
+    try { session.undo(); } catch (e) { toast(e.message); return; }
+    if (what === 'answer') reviewed = Math.max(0, reviewed - 1);
+    toast(what === 'answer' ? 'Answer undone' : `Undone: ${what}`);
     loadNext();
   }
 
@@ -152,8 +162,27 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
     audio.play(col, showingAnswer ? [...(cfg.replayQuestion ? rendered.questionAV : []), ...rendered.answerAV] : rendered.questionAV);
   }
 
+  // The end screens are laid over the card view instead of replacing it: taking the iframe out of the page
+  // would reload it, and Undo would then bring the card back blank.
+  let panel = null;
+  function showPanel(...children) {
+    panel?.remove();
+    frameWrap.style.display = 'none';
+    bar.style.display = 'none';
+    panel = h('div.finished', ...children);
+    body.append(panel);
+  }
+  function showCardView() {
+    if (!panel) return;
+    panel.remove();
+    panel = null;
+    frameWrap.style.display = '';
+    bar.style.display = '';
+  }
+
   function finished() {
     card = null;
+    audio.stop();
     renderCounts();
     const due = session.nextLearningDue;
     if (due && due < col.nextDayAt) {
@@ -164,32 +193,34 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
         timerEl.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
         if (col.now >= until) loadNext(); else waitTimer = setTimeout(tick, 1000);
       };
-      clear(body, h('div.finished', h('div', { style: { color: 'var(--learn)' } }, icon('hourglass')),
+      showPanel(h('div', { style: { color: 'var(--learn)' } }, icon('hourglass')),
         h('h2', 'Coming up'), h('p.muted', 'Learning cards are due soon. They’ll appear automatically.'), timerEl,
-        h('button.btn.tinted', { onclick: close }, 'Close')));
+        h('button.btn.tinted', { onclick: close }, 'Close'));
       tick();
       return;
     }
     if (session.practice) {
-      clear(body, h('div.finished',
+      showPanel(
         h('div.badge', icon('check')),
         h('h2', 'Round done!'),
         h('p.muted', `You went through ${session.total} random card${session.total === 1 ? '' : 's'}.`),
         h('button.btn.primary', { style: { maxWidth: '320px', marginTop: '16px' }, onclick: () => { close(); openStudy(deckId, { practice, size }); } }, icon('zap', 'sm'), `Another ${size}`),
-        h('button.btn', { style: { maxWidth: '320px', width: '100%' }, onclick: close }, 'Done')));
+        h('button.btn', { style: { maxWidth: '320px', width: '100%' }, onclick: close }, 'Done'));
       return;
     }
-    clear(body, h('div.finished',
+    showPanel(
       h('div.badge', icon('check')),
       h('h2', 'All done!'),
       h('p.muted', reviewed ? `You reviewed ${reviewed} card${reviewed === 1 ? '' : 's'}. Come back tomorrow for more.` : 'There are no more cards due in this deck today.'),
-      h('button.btn.primary', { style: { maxWidth: '320px', marginTop: '16px' }, onclick: close }, 'Done')));
+      h('button.btn.primary', { style: { maxWidth: '320px', marginTop: '16px' }, onclick: close }, 'Done'));
   }
 
   async function menu() {
     if (!card) return;
     const c = card;
-    const act = (fn, msg) => () => { fn(); if (msg) toast(msg); session.rebuild(); loadNext(); };
+    // menu changes go through the session so Undo can revert them
+    const act = (label, ids, fn, msg) => () => { session.change(label, ids, c.id, fn); toast(msg); session.rebuild(); loadNext(); };
+    const noteIds = () => col.cardsOfNote(c.nid).map((x) => x.id);
     await actionSheet(null, [
       { label: 'Edit note', icon: 'edit', run: () => openEditor({ note: col.note(c.nid), onSaved: () => {
         session.refresh(c.id);
@@ -198,10 +229,10 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
       } }) },
       { label: 'Replay audio', icon: 'volume', run: replay },
       { label: (c.flags & 7) ? 'Change flag' : 'Flag card', icon: 'flag', run: flagMenu },
-      { label: 'Bury card', icon: 'eyeoff', run: act(() => { col.bury([c.id]); session.remove([c.id]); }, 'Card buried') },
-      { label: 'Bury note', icon: 'eyeoff', run: act(() => { const ids = col.cardsOfNote(c.nid).map((x) => x.id); col.bury(ids); session.remove(ids); }, 'Note buried') },
-      { label: 'Suspend card', icon: 'pause', run: act(() => { col.setSuspended(true, [c.id]); session.remove([c.id]); }, 'Card suspended') },
-      { label: 'Reset to new', icon: 'reset', run: act(() => { col.resetToNew([c.id]); session.remove([c.id]); }, 'Card reset') },
+      { label: 'Bury card', icon: 'eyeoff', run: act('bury card', [c.id], () => { col.bury([c.id]); session.remove([c.id]); }, 'Card buried') },
+      { label: 'Bury note', icon: 'eyeoff', run: () => { const ids = noteIds(); act('bury note', ids, () => { col.bury(ids); session.remove(ids); }, 'Note buried')(); } },
+      { label: 'Suspend card', icon: 'pause', run: act('suspend card', [c.id], () => { col.setSuspended(true, [c.id]); session.remove([c.id]); }, 'Card suspended') },
+      { label: 'Reset to new', icon: 'reset', run: act('reset card', [c.id], () => { col.resetToNew([c.id]); session.remove([c.id]); }, 'Card reset') },
       { label: 'Delete note', icon: 'trash', danger: true, run: async () => {
         if (!await confirmDialog('Delete note?', 'This deletes the note and all its cards.', { ok: 'Delete', danger: true })) return;
         const ids = col.cardsOfNote(c.nid).map((x) => x.id);
@@ -217,17 +248,23 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
   async function flagMenu() {
     const c = card;
     const f = await actionSheet('Flag', FLAG_NAMES.map((name, i) => ({ label: name, value: String(i) })));
-    if (f === null) return;
-    col.setFlag(Number(f), [c.id]);
+    if (f === null || card !== c) return;
+    session.change('flag', [c.id], c.id, () => col.setFlag(Number(f), [c.id]));
     session.refresh(c.id);
     card = col.card(c.id);
+    showFlag();
+    renderCounts();
+  }
+
+  function showFlag() {
     flagEl.innerHTML = '';
-    if (card.flags & 7) flagEl.append(h('span', { style: { color: FLAG_COLORS[card.flags & 7] } }, icon('flag', 'sm')));
+    if (card && (card.flags & 7)) flagEl.append(h('span', { style: { color: FLAG_COLORS[card.flags & 7] } }, icon('flag', 'sm')));
   }
 
   function close() {
     dismiss(overlay);
     document.removeEventListener('keydown', keyHandler);
+    document.removeEventListener('visibilitychange', visHandler);
     clearTimeout(waitTimer);
     try { audio.stop(); } catch (e) { console.error(e); }
     try { frame.destroy(); } catch (e) { console.error(e); }

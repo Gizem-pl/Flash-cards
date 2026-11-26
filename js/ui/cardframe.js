@@ -132,6 +132,7 @@ export class CardFrame {
     this.handlers = handlers;
     this.ready = false;
     this.queued = null;
+    this.last = null;
     this.waiters = new Map();
     this.seq = 0;
     this.el = document.createElement('iframe');
@@ -141,7 +142,9 @@ export class CardFrame {
     this.onMessage = (e) => {
       if (e.source !== this.el.contentWindow) return;
       const d = e.data || {};
-      if (d.type === 'ready') { this.ready = true; if (this.queued) { this.post(this.queued); this.queued = null; } }
+      // 'ready' also arrives again whenever the iframe is taken out of the page and put back (it reloads then);
+      // send the current card again so it isn't left blank
+      if (d.type === 'ready') { this.ready = true; const m = this.queued || this.last; this.queued = null; if (m) this.post(m); }
       else if (d.type === 'tap') this.handlers.onTap?.();
       else if (d.type === 'ans') this.handlers.onAnswerKey?.();
       else if (d.type === 'play') this.handlers.onPlay?.(d.side, d.idx);
@@ -159,6 +162,7 @@ export class CardFrame {
     const [h2, c2] = await inlineMedia(this.col, html, css);
     if (token !== this.seq) return; // a newer card was requested meanwhile
     const msg = { type: 'show', html: h2, css: c2, cls, focus };
+    this.last = msg;
     if (this.ready) this.post(msg); else this.queued = msg;
   }
   typedAnswer() {

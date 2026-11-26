@@ -248,7 +248,12 @@ async function boot() {
   clear(root, stage, tabbar, fileInput);
   window.addEventListener('hashchange', render);
   // keep data safe when the app is backgrounded
-  document.addEventListener('visibilitychange', () => { if (document.hidden) app.col.flush(); else { resetViewport(); render(); } });
+  // (coming back refreshes the due counts, but not the note type editor, which holds unsaved edits)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { app.col.flush(); return; }
+    resetViewport();
+    if (route().name !== 'notetype') render();
+  });
   window.addEventListener('focus', resetViewport);
   window.addEventListener('pagehide', () => app.col.flush());
   // drag & drop import (desktop)
