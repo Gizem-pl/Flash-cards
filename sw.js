@@ -2,7 +2,7 @@
 // (so a launch never mixes old and new files) and from the cache when offline or when the server
 // returns an error;
 // the CDN libraries (JSZip, sql.js, fzstd, MathJax) are cached the first time they're used.
-const VERSION = 'v15';
+const VERSION = 'v16';
 const SHELL = `shell-${VERSION}`;
 const CDN = 'cdn-v1';
 const FILES = [

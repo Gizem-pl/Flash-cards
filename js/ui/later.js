@@ -1,4 +1,4 @@
-// The Later list (cards set aside while studying) and the Hardest cards.
+// The Later list (cards set aside while studying) and Needs practice (the hardest cards).
 import { h, icon, actionSheet, confirmDialog, toast } from './dom.js';
 import { app, navigate } from './app.js';
 import { LATER_TAG } from '../core/collection.js';
@@ -88,12 +88,12 @@ async function laterMore() {
   ].filter(Boolean));
 }
 
-// ---------------------------------------------------------------- Hardest cards
+// ---------------------------------------------------------------- Needs practice (the hardest cards)
 
 export function hardestView(root) {
   const col = app.col;
   const list = hardestCards(col, { limit: 50 });
-  header(root, 'Hardest cards');
+  header(root, 'Needs practice');
 
   const pick = list.map((x) => x.card).filter((c) => c.queue >= 0).slice(0, ROUND);
   root.append(h('div.card.pad',

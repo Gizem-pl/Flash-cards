@@ -1,5 +1,5 @@
 import { h, icon, countsPills, actionSheet, promptDialog, toast } from './dom.js';
-import { app, navigate, pickImportFile } from './app.js';
+import { app, navigate, pickImportFile, savePrefs } from './app.js';
 import { collectionStats } from '../core/stats.js';
 import { openStudy } from './study.js';
 import { openEditor } from './editor.js';
@@ -38,17 +38,22 @@ export function decksView(root) {
     return;
   }
 
-  // random practice from everything, the Later list and the hardest cards
+  // random practice from everything; the Later list and Needs practice sit in a section that opens on tap (closed by default)
   const later = col.laterCards().length;
+  const more = !!app.prefs.morePractice;
   root.append(h('h2.section', 'Practice'));
   root.append(h('div.list',
     h('button.row.tap', { onclick: () => openStudy(tree.map((n) => n.deck.id), { practice: true }) }, icon('zap', 'sm ic'),
       h('div.grow', h('div', 'Random 25'), h('div.sub', 'Unseen cards first, from all your decks')), icon('right', 'sm chev')),
-    h('button.row.tap', { onclick: () => navigate('/later') }, icon('clock', 'sm ic'),
+    h('button.row.tap.more-practice', { 'aria-expanded': String(more), onclick: () => { app.prefs.morePractice = !more; savePrefs(); app.rerender(); } },
+      icon('layers', 'sm ic'),
+      h('div.grow', h('div', 'More practice'), h('div.sub', 'Later and Needs practice')),
+      icon('right', `sm chev${more ? ' open' : ''}`)),
+    more ? h('button.row.tap', { onclick: () => navigate('/later') }, icon('clock', 'sm ic'),
       h('div.grow', h('div', 'Later'), h('div.sub', later ? `${later} card${later === 1 ? '' : 's'} set aside` : 'Cards you set aside while studying')),
-      later ? h('span.pill.learn', String(later)) : null, icon('right', 'sm chev')),
-    h('button.row.tap', { onclick: () => navigate('/hardest') }, icon('target', 'sm ic'),
-      h('div.grow', h('div', 'Hardest cards'), h('div.sub', 'The cards you struggle with most')), icon('right', 'sm chev'))));
+      later ? h('span.pill.learn', String(later)) : null, icon('right', 'sm chev')) : null,
+    more ? h('button.row.tap', { onclick: () => navigate('/hardest') }, icon('target', 'sm ic'),
+      h('div.grow', h('div', 'Needs practice'), h('div.sub', 'The cards you struggle with most')), icon('right', 'sm chev')) : null));
 
   root.append(h('h2.section', 'Your decks'));
   const dropTop = h('div.drop-top.hidden', icon('left', 'sm'), 'Move out of folder');
