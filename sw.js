@@ -1,7 +1,8 @@
 // Offline support: the app shell is precached; app files come from the network when online
-// (so a launch never mixes old and new files) and from the cache when offline;
+// (so a launch never mixes old and new files) and from the cache when offline or when the server
+// returns an error;
 // the CDN libraries (JSZip, sql.js, fzstd, MathJax) are cached the first time they're used.
-const VERSION = 'v14';
+const VERSION = 'v15';
 const SHELL = `shell-${VERSION}`;
 const CDN = 'cdn-v1';
 const FILES = [
@@ -55,7 +56,13 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(caches.open(SHELL).then(async (c) => {
     const key = url.pathname.endsWith('/') ? './' : req;
     const cached = () => c.match(key, { ignoreSearch: true });
-    const network = fetch(req, { cache: 'no-cache' }).then((res) => { if (res.ok) c.put(key, res.clone()); return res; });
+    // if the server answers with an error (e.g. the site is taken down, or GitHub is having trouble),
+    // keep using the saved copy instead of showing the error page
+    const network = fetch(req, { cache: 'no-cache' }).then(async (res) => {
+      if (res.ok) { c.put(key, res.clone()); return res; }
+      if (res.status >= 400) return (await cached()) || res;
+      return res;
+    });
     // on a very slow connection, use the cached copy after a few seconds
     const slow = new Promise((r) => setTimeout(r, 3000)).then(cached);
     try {
