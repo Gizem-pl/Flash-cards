@@ -31,6 +31,8 @@ Tap **+ → Import .apkg** and pick a file from the Files app (iCloud Drive, Dow
 - **Deck options:** Anki's settings, organised in presets. Each deck screen also has a quick picker for new cards per day (20 / 40 / 50 / 100).
 - **Custom decks:** combine several decks (for example *Day 1* + *Day 51*) and study them together.
 - **Random 25:** a practice round of 25 random cards from a deck, a custom deck or everything. Cards you haven't answered yet come first, so every card shows up once before any repeats. Answers are scheduled with the same 4 buttons as normal study.
+- **Later:** a Later button between Again and Good sets a card aside without answering it. It's hidden until tomorrow, comes back in normal study as usual, and stays on the **Later** list (Decks → Practice) until you answer it Good or Easy. The list is the `later` tag, so it survives backups and shows in Anki too.
+- **Hardest cards:** your 50 hardest cards, ranked by Again presses, forgotten cards and how often you set them aside, with a practice round of the top 25.
 - **Cards:** card templates with HTML/CSS/JavaScript, cloze deletions (including nested and hints), type-in answers, images, audio, text-to-speech, furigana, math (MathJax) and night mode.
 - **Card browser:** uses Anki's search syntax (`dog`, `deck:Spanish`, `tag:verb`, `is:due`, `-is:new`, `front:h*`, `prop:ivl>30`, `OR`, parentheses) and has filters and card actions.
 - **Statistics:** today's reviews, streak, retention, upcoming reviews, an activity heatmap, card counts and answer buttons.

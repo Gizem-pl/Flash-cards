@@ -9,7 +9,7 @@ import { FLAG_COLORS } from './study.js';
 
 const FILTERS = [
   ['All', ''], ['Due', 'is:due'], ['New', 'is:new'], ['Learning', 'is:learn'], ['Review', 'is:review'],
-  ['Suspended', 'is:suspended'], ['Flagged', '-flag:0'], ['Leeches', 'tag:leech'], ['Added today', 'added:1'], ['Studied today', 'rated:1'],
+  ['Suspended', 'is:suspended'], ['Flagged', '-flag:0'], ['Later', 'tag:later'], ['Leeches', 'tag:leech'], ['Added today', 'added:1'], ['Studied today', 'rated:1'],
 ];
 const state = { query: '', filter: '', sort: 'created', asc: false, limit: 200 };
 
@@ -87,7 +87,7 @@ export function browseView(root) {
 }
 
 /** Sort field without cloze markup: {{c1::Paris::hint}} → Paris */
-const displayText = (s) => String(s || '').replace(/\{\{c\d+::([\s\S]*?)(?:::[^}]*)?\}\}/g, '$1');
+export const displayText = (s) => String(s || '').replace(/\{\{c\d+::([\s\S]*?)(?:::[^}]*)?\}\}/g, '$1');
 
 function dueText(c, today) {
   if (c.type === 0) return `New #${c.due}`;

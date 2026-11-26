@@ -1,14 +1,14 @@
 // Offline support: the app shell is precached; app files come from the network when online
 // (so a launch never mixes old and new files) and from the cache when offline;
 // the CDN libraries (JSZip, sql.js, fzstd, MathJax) are cached the first time they're used.
-const VERSION = 'v12';
+const VERSION = 'v13';
 const SHELL = `shell-${VERSION}`;
 const CDN = 'cdn-v1';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/core/util.js', 'js/core/storage.js', 'js/core/scheduler.js', 'js/core/template.js', 'js/core/stock.js', 'js/core/collection.js',
   'js/core/session.js', 'js/core/search.js', 'js/core/stats.js', 'js/core/libs.js', 'js/core/protobuf.js', 'js/core/importer.js', 'js/core/exporter.js',
-  'js/ui/app.js', 'js/ui/dom.js', 'js/ui/cardframe.js', 'js/ui/decks.js', 'js/ui/overview.js', 'js/ui/custom.js', 'js/ui/study.js', 'js/ui/editor.js',
+  'js/ui/app.js', 'js/ui/dom.js', 'js/ui/cardframe.js', 'js/ui/decks.js', 'js/ui/overview.js', 'js/ui/custom.js', 'js/ui/later.js', 'js/ui/study.js', 'js/ui/editor.js',
   'js/ui/options.js', 'js/ui/browse.js', 'js/ui/statsview.js', 'js/ui/settings.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];

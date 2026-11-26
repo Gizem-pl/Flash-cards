@@ -51,3 +51,25 @@ export function collectionStats(col, deckId = null, forecastDays = 30, historyDa
     totalReviews: revs.length,
   };
 }
+
+/**
+ * The cards you struggle with most, hardest first. Points: 1 for each Again, 1 more each time a card you had learned
+ * was forgotten (a lapse), and 1 for each time you set it aside for later. Ties go to the higher share of Again answers.
+ */
+export function hardestCards(col, { limit = 50, minScore = 2 } = {}) {
+  const out = [];
+  for (const c of col.cards.values()) {
+    let again = 0, answers = 0;
+    for (const r of col.revlogByCard.get(c.id) || []) {
+      if (r.ease === 0 || r.type === 4) continue; // manual changes (reset, set due date), not answers
+      answers++;
+      if (r.ease === 1) again++;
+    }
+    const setAside = col.setAsideInfo(c.id).count;
+    const lapses = c.lapses || 0;
+    const score = again + lapses + setAside;
+    if (score < minScore) continue;
+    out.push({ card: c, score, again, lapses, setAside, answers, rate: answers ? again / answers : 0 });
+  }
+  return out.sort((a, b) => b.score - a.score || b.rate - a.rate || (b.card.d || 0) - (a.card.d || 0) || a.card.id - b.card.id).slice(0, limit);
+}

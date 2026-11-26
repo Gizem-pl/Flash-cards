@@ -6,6 +6,7 @@ import { h, clear, icon, toast, progress, sheet, shareOrDownload } from './dom.j
 import { decksView } from './decks.js';
 import { overviewView } from './overview.js';
 import { customView } from './custom.js';
+import { laterView, hardestView } from './later.js';
 import { browseView } from './browse.js';
 import { statsView } from './statsview.js';
 import { settingsView, notetypesView, notetypeEditorView } from './settings.js';
@@ -41,7 +42,7 @@ const TABS = [
   ['stats', 'Stats', 'chart'],
   ['settings', 'Settings', 'gear'],
 ];
-const TAB_OF = { deck: 'decks', custom: 'decks', notetypes: 'settings', notetype: 'settings' };
+const TAB_OF = { deck: 'decks', custom: 'decks', later: 'decks', hardest: 'decks', notetypes: 'settings', notetype: 'settings' };
 
 function route() {
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -57,7 +58,7 @@ let currentKey = '';
 let currentRoute = null;
 
 // how deep a screen is inside its tab: pushing deeper slides in from the right, going back slides out
-const DEPTH = { deck: 1, custom: 1, notetypes: 1, notetype: 2 };
+const DEPTH = { deck: 1, custom: 1, later: 1, hardest: 1, notetypes: 1, notetype: 2 };
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 function buildView(r) {
@@ -66,6 +67,8 @@ function buildView(r) {
     switch (r.name) {
       case 'deck': overviewView(inner, Number(r.arg)); break;
       case 'custom': customView(inner, Number(r.arg)); break;
+      case 'later': laterView(inner); break;
+      case 'hardest': hardestView(inner); break;
       case 'browse': browseView(inner); break;
       case 'stats': statsView(inner); break;
       case 'settings': settingsView(inner); break;

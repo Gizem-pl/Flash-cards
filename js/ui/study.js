@@ -1,7 +1,7 @@
 // Full-screen review session.
 import { h, clear, icon, actionSheet, confirmDialog, toast, dismiss } from './dom.js';
 import { app, isDark } from './app.js';
-import { StudySession, PracticeSession } from '../core/session.js';
+import { StudySession, PracticeSession, LaterSession, CardsSession } from '../core/session.js';
 import { RATINGS, RATING_NAMES } from '../core/scheduler.js';
 import { formatInterval } from '../core/util.js';
 import { CardFrame, audio } from './cardframe.js';
@@ -13,12 +13,17 @@ export const FLAG_COLORS = ['transparent', '#ff3b30', '#ff9500', '#34c759', '#00
 /**
  * deckId: a deck id, or an array of deck ids (custom deck).
  * practice: a random round of `size` cards from those decks (unseen cards first), scheduled like a normal session.
+ * later: a round of `size` cards from the Later list (deckId is ignored).
+ * cards: a round of exactly these cards, e.g. the hardest ones (deckId is ignored); `title` names it on the end screen.
  */
-export function openStudy(deckId, { practice = false, size = 25 } = {}) {
+export function openStudy(deckId, { practice = false, size = 25, later = false, cards = null, title = '' } = {}) {
   const col = app.col;
   let session;
-  try { session = practice ? new PracticeSession(col, deckId, size) : new StudySession(col, deckId); } catch (e) { toast(e.message); return; }
-  if (practice && !session.total) { toast('There are no cards to practise here.'); return; }
+  try {
+    session = later ? new LaterSession(col, size) : cards ? new CardsSession(col, cards)
+      : practice ? new PracticeSession(col, deckId, size) : new StudySession(col, deckId);
+  } catch (e) { toast(e.message); return; }
+  if (session.practice && !session.total) { toast(later ? 'Your Later list is empty.' : 'There are no cards to practise here.'); return; }
 
   let card = null, rendered = null, showingAnswer = false, previews = null, shownAt = Date.now(), reviewed = 0, waitTimer = null, cfg = null;
   let day = col.today;
@@ -67,6 +72,7 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
     if (!showingAnswer && (key === ' ' || key === 'Enter')) { reveal(); return true; }
     if (showingAnswer && (key === ' ' || key === 'Enter')) { answer(3); return true; }
     if (showingAnswer && shownRatings().map(String).includes(key)) { answer(Number(key)); return true; }
+    if (showingAnswer && key.toLowerCase() === 'l') { setAside(); return true; }
     if (key === 'r') { replay(); return true; }
     return false;
   }
@@ -128,14 +134,20 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
   // "Two buttons" setting: only Again and Good.
   function shownRatings() { return app.prefs.twoButtons ? [1, 3] : RATINGS; }
 
+  // Later sits in the middle: Again | Later | Good, or Again | Hard | Later | Good | Easy
   function renderBar() {
     if (!showingAnswer) {
       clear(bar, h('button.btn.primary.show', { onclick: reveal }, 'Show answer'));
       return;
     }
-    clear(bar, shownRatings().map((r, i) => h(`button.rate.r${r}`, { style: { animationDelay: `${i * 25}ms` }, onclick: () => answer(r) },
+    const ratings = shownRatings();
+    const buttons = ratings.map((r) => h(`button.rate.r${r}`, { onclick: () => answer(r) },
       app.prefs.showIntervals ? h('span.ivl', formatInterval(previews[r].secs)) : null,
-      h('span.lbl', RATING_NAMES[r]))));
+      h('span.lbl', RATING_NAMES[r])));
+    buttons.splice(ratings.indexOf(3), 0, h('button.rate.later', { 'aria-label': 'Later: set this card aside without answering', onclick: setAside },
+      app.prefs.showIntervals ? icon('clock', 'xs') : null, h('span.lbl', 'Later')));
+    buttons.forEach((b, i) => { b.style.animationDelay = `${i * 25}ms`; });
+    clear(bar, buttons);
   }
 
   function answer(rating) {
@@ -144,7 +156,20 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
       const res = session.answer(card, rating, Date.now() - shownAt);
       reviewed++;
       if (res.leech) toast(cfg.leechAction === 0 ? 'Leech — card suspended' : 'Card marked as leech');
+      else if (res.leftLater) toast('Off your Later list');
     } catch (e) { toast(e.message); }
+    loadNext();
+  }
+
+  // Set the card aside: no answer is recorded, it's hidden until tomorrow and goes on the Later list.
+  function setAside() {
+    if (!card) return;
+    const c = card;
+    try {
+      session.change('set aside', [c.id], c.id, () => { col.setAside([c.id]); session.remove([c.id]); });
+    } catch (e) { toast(e.message); return; }
+    toast('Set aside for later');
+    session.rebuild();
     loadNext();
   }
 
@@ -199,6 +224,25 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
       tick();
       return;
     }
+    if (later) {
+      const left = col.laterCards().filter((x) => x.queue !== -1).length;
+      showPanel(
+        h('div.badge', icon('check')),
+        h('h2', 'Round done!'),
+        h('p.muted', left ? `${left} card${left === 1 ? ' is' : 's are'} still on your Later list.` : 'Your Later list is empty.'),
+        left ? h('button.btn.primary', { style: { maxWidth: '320px', marginTop: '16px' }, onclick: () => { close(); openStudy(null, { later, size }); } },
+          icon('clock', 'sm'), left > size ? `Next ${size}` : 'Go again') : null,
+        h(`button.btn${left ? '' : '.primary'}`, { style: { maxWidth: '320px', width: '100%', marginTop: left ? '' : '16px' }, onclick: close }, 'Done'));
+      return;
+    }
+    if (cards) {
+      showPanel(
+        h('div.badge', icon('check')),
+        h('h2', 'Round done!'),
+        h('p.muted', `You went through ${session.total} ${title || 'card'}${session.total === 1 ? '' : 's'}.`),
+        h('button.btn.primary', { style: { maxWidth: '320px', marginTop: '16px' }, onclick: close }, 'Done'));
+      return;
+    }
     if (session.practice) {
       showPanel(
         h('div.badge', icon('check')),
@@ -228,6 +272,7 @@ export function openStudy(deckId, { practice = false, size = 25 } = {}) {
         frame.show(showingAnswer ? rendered.answer : rendered.question, rendered.css, cls(), false);
       } }) },
       { label: 'Replay audio', icon: 'volume', run: replay },
+      { label: 'Set aside for later', icon: 'clock', run: setAside },
       { label: (c.flags & 7) ? 'Change flag' : 'Flag card', icon: 'flag', run: flagMenu },
       { label: 'Bury card', icon: 'eyeoff', run: act('bury card', [c.id], () => { col.bury([c.id]); session.remove([c.id]); }, 'Card buried') },
       { label: 'Bury note', icon: 'eyeoff', run: () => { const ids = noteIds(); act('bury note', ids, () => { col.bury(ids); session.remove(ids); }, 'Note buried')(); } },

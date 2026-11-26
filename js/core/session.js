@@ -1,7 +1,7 @@
 // A study session following Anki's v3 queue rules: intraday learning cards when due, then reviews / interday learning /
 // new cards mixed per the deck options, with daily limits applied through the deck tree.
 import { answerCard, previewAll, CardType, Queue } from './scheduler.js';
-import { deckParentName } from './collection.js';
+import { deckParentName, naturalQueue, LATER_TAG } from './collection.js';
 
 export class StudySession {
   /** deckId: one deck id, or an array of deck ids (a custom deck) studied together with their subdecks. */
@@ -136,17 +136,25 @@ export class StudySession {
     const cfg = ctx.config;
     const entry = { kind: 'answer', before: { ...card }, revlogId: 0, siblings: [], noteTags: null, newDelta: 0, reviewDelta: 0, learning: [...this.learning], main: [...this.main] };
     const updated = result.card;
+    const note = col.note(card.nid);
     if (result.leech) {
-      const note = col.note(card.nid);
       if (note) { entry.noteTags = [...note.tags]; col.addTags(['leech'], [note.id]); }
       if (cfg.leechAction === 0) updated.queue = Queue.Suspended;
+    }
+    // Good or Easy takes the card off the Later list
+    if (rating >= 3 && col.isLater(note)) {
+      if (!entry.noteTags) entry.noteTags = [...note.tags];
+      col.removeTags([LATER_TAG], [note.id]);
+      result.leftLater = true;
     }
     col.saveCard(updated);
     entry.revlogId = col.newId(col.revlog);
     col.addRevlog({ id: entry.revlogId, cid: card.id, ease: rating, ivl: result.revlog.ivl, lastIvl: result.revlog.lastIvl,
       factor: result.revlog.factor, time: Math.min(timeMs, cfg.maxAnswerSecs * 1000), type: result.revlog.type });
-    if (card.queue === Queue.New) entry.newDelta = 1;
-    if (card.queue === Queue.Review || card.queue === Queue.DayLearning) entry.reviewDelta = 1;
+    // a card set aside earlier today is buried; count it by the queue it would be in
+    const queue = card.queue < 0 ? naturalQueue(card) : card.queue;
+    if (queue === Queue.New) entry.newDelta = 1;
+    if (queue === Queue.Review || queue === Queue.DayLearning) entry.reviewDelta = 1;
     if (entry.newDelta + entry.reviewDelta) col.incrementToday(card.did, entry.newDelta, entry.reviewDelta);
 
     if (cfg.buryNew || cfg.buryReviews || cfg.buryInterday) {
@@ -174,14 +182,16 @@ export class StudySession {
   }
 
   /**
-   * Runs a change to some cards made from the study menu (bury, suspend, flag, reset) so that Undo can revert it.
+   * Runs a change to some cards made from the study menu (bury, suspend, flag, reset, set aside) so that Undo can revert it.
    * `showId` is the card on screen, which comes back first after the undo.
    */
   change(label, ids, showId, fn) {
     const col = this.col;
     const cards = ids.map((id) => col.card(id)).filter(Boolean).map((c) => ({ ...c }));
     const oldLog = new Set(ids.flatMap((id) => col.revlogFor(id).map((r) => r.id)));
-    const entry = { kind: 'change', label, cards, showId, learning: [...this.learning], main: [...this.main] };
+    const notes = [...new Set(cards.map((c) => c.nid))].map((id) => col.note(id)).filter(Boolean).map((n) => ({ id: n.id, tags: [...n.tags] }));
+    const setAside = ids.map((id) => [id, col.setAsideInfo(id)]);
+    const entry = { kind: 'change', label, cards, notes, setAside, showId, learning: [...this.learning], main: [...this.main] };
     fn();
     entry.revlogIds = ids.flatMap((id) => col.revlogFor(id).map((r) => r.id)).filter((id) => !oldLog.has(id));
     this.pushUndo(entry);
@@ -197,15 +207,17 @@ export class StudySession {
     // the saved queues hold the cards as they were; use the current copies and drop any that were buried,
     // suspended or deleted since
     const fresh = (list, ok) => list.map((c) => col.card(c.id)).filter((c) => c && ok(c));
-    const inMain = (c) => c.queue >= 0;
+    const inMain = (c) => this.canShow(c);
     const inLearning = (c) => c.queue === Queue.Learning;
     if (e.kind === 'change') {
       e.cards.forEach((c) => col.saveCard({ ...c }));
       e.revlogIds.forEach((id) => col.removeRevlog(id));
+      e.notes.forEach(({ id, tags }) => { const n = col.note(id); if (n) { n.tags = tags; col._put('notes', n); } });
+      e.setAside.forEach(([id, info]) => col.restoreSetAside(id, info));
       this.learning = fresh(e.learning, inLearning);
       this.main = fresh(e.main, inMain);
       const shown = col.card(e.showId);
-      if (shown && shown.queue >= 0 && !this.main.some((c) => c.id === shown.id) && !this.learning.some((c) => c.id === shown.id)) this.main.unshift(shown);
+      if (shown && this.canShow(shown) && !this.main.some((c) => c.id === shown.id) && !this.learning.some((c) => c.id === shown.id)) this.main.unshift(shown);
       this.front = shown ? shown.id : null;
       return shown;
     }
@@ -219,6 +231,9 @@ export class StudySession {
     this.front = e.before.id;
     return e.before;
   }
+
+  /** Whether a card may be in this session's queue (after an undo). */
+  canShow(c) { return c.queue >= 0; }
 
   remove(ids) {
     const set = new Set(ids);
@@ -234,30 +249,65 @@ export class StudySession {
   }
 }
 
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
 /**
- * Random round: up to `size` random cards from the given decks (and their subdecks), not just the due ones.
- * Cards never answered yet (new) are picked first, so every card shows up once before any repeats;
- * when fewer than `size` are left, the rest is filled with random already-seen cards.
+ * A fixed round of cards (random practice, the Later list, the hardest cards), not just the due ones.
  * Answers are scheduled with Anki's 4-button scheduler, exactly like a normal study session.
  */
-export class PracticeSession extends StudySession {
-  constructor(col, deckIds, size = 25) {
+export class RoundSession extends StudySession {
+  constructor(col, cards, deckIds = []) {
     super(col, deckIds);
     this.practice = true;
-    this.size = size;
-    const ids = new Set(this.deckIds.filter((id) => col.deck(id)).flatMap((id) => col.deckAndDescendantIds(id)));
-    // like Anki's filtered decks: suspended and buried cards are left out
-    const pool = [...col.cards.values()].filter((c) => ids.has(c.did) && c.queue >= 0);
-    const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-    const unseen = shuffle(pool.filter((c) => c.type === CardType.New));
-    const seen = unseen.length >= size ? [] : shuffle(pool.filter((c) => c.type !== CardType.New));
     this.learning = [];
-    this.main = shuffle(unseen.concat(seen).slice(0, size));
-    this.total = this.main.length;
+    this.main = cards;
+    this.total = cards.length;
   }
 
   get counts() { return { remaining: this.main.length + this.learning.length }; }
   rebuild() { /* the round is fixed once picked */ }
+}
+
+/**
+ * Random round: up to `size` random cards from the given decks (and their subdecks).
+ * Cards never answered yet (new) are picked first, so every card shows up once before any repeats;
+ * when fewer than `size` are left, the rest is filled with random already-seen cards.
+ */
+export class PracticeSession extends RoundSession {
+  constructor(col, deckIds, size = 25) {
+    const roots = (Array.isArray(deckIds) ? deckIds : [deckIds]).filter((id) => col.deck(id));
+    const ids = new Set(roots.flatMap((id) => col.deckAndDescendantIds(id)));
+    // like Anki's filtered decks: suspended and buried cards are left out
+    const pool = [...col.cards.values()].filter((c) => ids.has(c.did) && c.queue >= 0);
+    const unseen = shuffle(pool.filter((c) => c.type === CardType.New));
+    const seen = unseen.length >= size ? [] : shuffle(pool.filter((c) => c.type !== CardType.New));
+    super(col, shuffle(unseen.concat(seen).slice(0, size)), deckIds);
+    this.size = size;
+  }
+}
+
+/**
+ * The Later list, `size` cards at a time, shuffled: the ones you haven't touched for longest come first
+ * (set aside or answered longest ago), so "Next 25" moves on to other cards.
+ * Unlike Random practice it includes cards set aside today (which are buried until tomorrow).
+ */
+export class LaterSession extends RoundSession {
+  constructor(col, size = 25) {
+    const touched = (c) => Math.max(col.setAsideInfo(c.id).at, ...(col.revlogByCard.get(c.id) || []).map((r) => Math.floor(r.id / 1000)));
+    const cards = col.laterCards().filter((c) => c.queue !== Queue.Suspended)
+      .map((c) => [touched(c), c]).sort((x, y) => x[0] - y[0]).map(([, c]) => c);
+    super(col, shuffle(cards.slice(0, size)));
+    this.size = size;
+  }
+
+  canShow(c) { return c.queue !== Queue.Suspended; }
+}
+
+/** Practice for the given cards (e.g. the hardest ones), shuffled; suspended and buried cards are left out. */
+export class CardsSession extends RoundSession {
+  constructor(col, cards) {
+    super(col, shuffle(cards.filter((c) => c.queue >= 0)));
+  }
 }
 
 /** Interleaves `extra` evenly into `base` (or before / after it). */

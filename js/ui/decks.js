@@ -38,11 +38,17 @@ export function decksView(root) {
     return;
   }
 
-  // random practice from everything
+  // random practice from everything, the Later list and the hardest cards
+  const later = col.laterCards().length;
   root.append(h('h2.section', 'Practice'));
   root.append(h('div.list',
     h('button.row.tap', { onclick: () => openStudy(tree.map((n) => n.deck.id), { practice: true }) }, icon('zap', 'sm ic'),
-      h('div.grow', h('div', 'Random 25'), h('div.sub', 'Unseen cards first, from all your decks')), icon('right', 'sm chev'))));
+      h('div.grow', h('div', 'Random 25'), h('div.sub', 'Unseen cards first, from all your decks')), icon('right', 'sm chev')),
+    h('button.row.tap', { onclick: () => navigate('/later') }, icon('clock', 'sm ic'),
+      h('div.grow', h('div', 'Later'), h('div.sub', later ? `${later} card${later === 1 ? '' : 's'} set aside` : 'Cards you set aside while studying')),
+      later ? h('span.pill.learn', String(later)) : null, icon('right', 'sm chev')),
+    h('button.row.tap', { onclick: () => navigate('/hardest') }, icon('target', 'sm ic'),
+      h('div.grow', h('div', 'Hardest cards'), h('div.sub', 'The cards you struggle with most')), icon('right', 'sm chev'))));
 
   root.append(h('h2.section', 'Your decks'));
   const dropTop = h('div.drop-top.hidden', icon('left', 'sm'), 'Move out of folder');

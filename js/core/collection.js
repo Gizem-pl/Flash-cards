@@ -10,6 +10,7 @@ import {
 export const DEFAULT_DECK = 1;
 export const DEFAULT_CONF = 1;
 export const SEP = '::';
+export const LATER_TAG = 'later';
 
 export const normalizeDeckName = (n) => String(n).split(SEP).map((s) => s.trim()).filter(Boolean).join(SEP);
 export const deckBaseName = (n) => n.split(SEP).pop();
@@ -294,6 +295,51 @@ export class Collection {
       this._put('notes', n);
     }
   }
+  removeTags(tags, nids) {
+    const drop = new Set(tags.map((t) => t.toLowerCase()));
+    for (const id of nids) {
+      const n = this.notes.get(id);
+      if (!n || !n.tags.some((t) => drop.has(t.toLowerCase()))) continue;
+      n.tags = n.tags.filter((t) => !drop.has(t.toLowerCase()));
+      n.mod = this.now;
+      this._put('notes', n);
+    }
+  }
+
+  // ------------------------------------------------------------ Later list
+  // Cards set aside while studying. The list is the notes tagged "later" (so it survives backups and shows in Anki);
+  // how often and when each card was set aside is kept on this device only (meta.setAside[cardId] = [count, unixSecs]).
+
+  isLater(note) { return !!note && note.tags.some((t) => t.toLowerCase() === LATER_TAG); }
+  /** Tags the cards' notes "later", buries the cards until tomorrow and counts the set-aside. No answer is recorded. */
+  setAside(ids) {
+    const counts = this.meta.setAside || (this.meta.setAside = {});
+    const nids = new Set();
+    for (const id of ids) {
+      const c = this.cards.get(id);
+      if (!c) continue;
+      nids.add(c.nid);
+      counts[id] = [(counts[id]?.[0] || 0) + 1, this.now];
+    }
+    this.addTags([LATER_TAG], [...nids]);
+    this.bury(ids);
+    this._saveMeta();
+  }
+  setAsideInfo(id) { const e = this.meta.setAside?.[id]; return e ? { count: e[0], at: e[1] } : { count: 0, at: 0 }; }
+  /** For Undo: puts back a card's set-aside record exactly as it was. */
+  restoreSetAside(id, info) {
+    const counts = this.meta.setAside || (this.meta.setAside = {});
+    if (info.count) counts[id] = [info.count, info.at]; else delete counts[id];
+    this._saveMeta();
+  }
+  /** Cards on the Later list, most recently set aside first. */
+  laterCards() {
+    const out = [];
+    for (const n of this.notes.values()) if (this.isLater(n)) out.push(...this.cardsOfNote(n.id));
+    return out.sort((a, b) => this.setAsideInfo(b.id).at - this.setAsideInfo(a.id).at || a.id - b.id);
+  }
+  removeFromLater(nids) { this.removeTags([LATER_TAG], nids); }
+
   allTags() {
     const set = new Set();
     for (const n of this.notes.values()) n.tags.forEach((t) => set.add(t));
@@ -357,6 +403,7 @@ export class Collection {
     if (list) { const i = list.findIndex((x) => x.id === id); if (i >= 0) list.splice(i, 1); if (!list.length) this.cardsByNote.delete(c.nid); }
     for (const r of this.revlogByCard.get(id) || []) { this.revlog.delete(r.id); this._del('revlog', r.id); }
     this.revlogByCard.delete(id);
+    if (this.meta.setAside?.[id]) { delete this.meta.setAside[id]; this._saveMeta(); }
   }
   card(id) { return this.cards.get(id); }
   cardsOfNote(nid) { return [...(this.cardsByNote.get(nid) || [])].sort((a, b) => a.ord - b.ord); }
